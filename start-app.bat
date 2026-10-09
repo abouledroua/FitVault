@@ -1,0 +1,13 @@
+@echo off
+echo Starting FitVault...
+
+echo Verifying database setup...
+powershell -ExecutionPolicy Bypass -File .\setup-db.ps1
+
+echo Starting Next.js Dev Server...
+start cmd /k "npm run dev"
+
+echo Starting Electron Desktop App...
+rem Wait a few seconds for Next.js to compile
+timeout /t 5 /nobreak > nul
+npm run start-electron

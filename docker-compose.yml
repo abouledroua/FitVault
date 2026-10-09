@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fitvault_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ''
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      MYSQL_USER: citrus
+      MYSQL_PASSWORD: 'citrus*21012013'
+      MYSQL_DATABASE: fitvault_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - fitvault_mysql_data:/var/lib/mysql
+
+volumes:
+  fitvault_mysql_data:
