@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Dumbbell, 
   Tag, 
@@ -11,6 +11,7 @@ import {
   Check, 
   X, 
   AlertCircle,
+  AlertTriangle,
   Clock,
   Layers,
   ShieldCheck,
@@ -20,7 +21,20 @@ import {
   User,
   Key,
   Lock,
-  Shield
+  Shield,
+  Power,
+  PowerOff,
+  Building2,
+  Phone,
+  Upload,
+  Download,
+  Database,
+  HardDrive,
+  Image as ImageIcon,
+  FileText,
+  CheckCircle2,
+  FolderUp,
+  Globe
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirmDialog } from '@/contexts/ConfirmDialogContext';
@@ -62,7 +76,31 @@ export default function SettingsPage() {
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [activeTab, setActiveTab] = useState<'sports' | 'offers' | 'users' | 'devices'>('sports');
+  const [activeTab, setActiveTab] = useState<'sports' | 'offers' | 'users' | 'devices' | 'general' | 'database'>('sports');
+
+  // General Gym Settings state
+  const [gymForm, setGymForm] = useState({
+    gym_name: '',
+    facebook: '',
+    phone: '',
+  });
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [badgeImageUrl, setBadgeImageUrl] = useState<string | null>(null);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [selectedBadgeFile, setSelectedBadgeFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [badgePreview, setBadgePreview] = useState<string | null>(null);
+  const [badgeTemplate, setBadgeTemplate] = useState<'standard' | 'chokri'>('standard');
+  const [loadingGeneral, setLoadingGeneral] = useState(false);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const badgeFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Database Backup & Restore state
+  const [exportingDb, setExportingDb] = useState(false);
+  const [restoringDb, setRestoringDb] = useState(false);
+  const [selectedRestoreFile, setSelectedRestoreFile] = useState<File | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   // Sports state
   const [sports, setSports] = useState<Sport[]>([]);
@@ -72,7 +110,8 @@ export default function SettingsPage() {
   const [sportForm, setSportForm] = useState({
     name: '',
     description: '',
-    default_single_session_price: '50'
+    default_single_session_price: '50',
+    is_active: true
   });
 
   // Offers state
@@ -87,7 +126,8 @@ export default function SettingsPage() {
     duration_type: 'standard_month' as 'session' | 'standard_month' | 'custom_days' | 'custom_months',
     duration_value: 1,
     sessions_count: '',
-    sport_ids: [] as number[]
+    sport_ids: [] as number[],
+    is_active: true
   });
 
   // Users state
@@ -114,6 +154,7 @@ export default function SettingsPage() {
     fetchOffers();
     fetchUsers();
     fetchDevices();
+    fetchGeneralSettings();
   }, []);
 
   const fetchSports = async () => {
@@ -176,6 +217,171 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchGeneralSettings = async () => {
+    setLoadingGeneral(true);
+    try {
+      const res = await fetch('/api/settings/general', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setGymForm({
+          gym_name: data.gym_name || '',
+          facebook: data.facebook || '',
+          phone: data.phone || '',
+        });
+        setLogoUrl(data.logo_url || null);
+        setBadgeImageUrl(data.badge_image_url || null);
+        setLogoPreview(data.logo_url || null);
+        setBadgePreview(data.badge_image_url || null);
+        setBadgeTemplate(data.badge_template === 'chokri' ? 'chokri' : 'standard');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingGeneral(false);
+    }
+  };
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBadgeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedBadgeFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBadgePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveGeneral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingGeneral(true);
+    try {
+      const formData = new FormData();
+      formData.append('gym_name', gymForm.gym_name);
+      formData.append('facebook', gymForm.facebook);
+      formData.append('phone', gymForm.phone);
+      formData.append('badge_template', badgeTemplate);
+
+      if (selectedLogoFile) {
+        formData.append('logo', selectedLogoFile);
+      } else if (!logoPreview && logoUrl) {
+        formData.append('remove_logo', 'true');
+      }
+
+      if (selectedBadgeFile) {
+        formData.append('badge_image', selectedBadgeFile);
+      } else if (!badgePreview && badgeImageUrl) {
+        formData.append('remove_badge_image', 'true');
+      }
+
+      const res = await fetch('/api/settings/general', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setLogoUrl(data.logo_url);
+        setBadgeImageUrl(data.badge_image_url);
+        setSelectedLogoFile(null);
+        setSelectedBadgeFile(null);
+        showToast('Paramètres de la salle enregistrés avec succès', 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Erreur lors de l\'enregistrement', 'error');
+      }
+    } catch (err) {
+      showToast('Erreur inattendue', 'error');
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
+
+  const handleExportDatabase = async () => {
+    setExportingDb(true);
+    try {
+      const res = await fetch('/api/settings/database/backup');
+      if (!res.ok) {
+        throw new Error('Erreur lors du téléchargement de la sauvegarde');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `fitvault_backup_${dateStr}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Sauvegarde de la base de données téléchargée avec succès', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de l\'exportation', 'error');
+    } finally {
+      setExportingDb(false);
+    }
+  };
+
+  const handleRestoreDatabase = async () => {
+    if (!selectedRestoreFile) {
+      showToast('Veuillez sélectionner un fichier SQL à restaurer', 'warning');
+      return;
+    }
+
+    const isConfirmed = await confirm({
+      title: 'Attention: Restauration de la Base de Données',
+      message: `Êtes-vous absolument sûr de vouloir restaurer la base de données à partir de "${selectedRestoreFile.name}" ? Cette action écrasera toutes les données actuelles de la salle (membres, abonnements, ventes, historique). Cette action est irréversible !`,
+      confirmText: 'Restaurer Maintenant',
+      cancelText: 'Annuler',
+      isDestructive: true,
+    });
+
+    if (!isConfirmed) return;
+
+    setRestoringDb(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedRestoreFile);
+
+      const res = await fetch('/api/settings/database/restore', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Base de données restaurée avec succès !', 'success');
+        setSelectedRestoreFile(null);
+        if (restoreFileInputRef.current) {
+          restoreFileInputRef.current.value = '';
+        }
+        fetchSports();
+        fetchOffers();
+        fetchUsers();
+        fetchGeneralSettings();
+      } else {
+        showToast(data.error || 'Erreur lors de la restauration', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Erreur inattendue lors de la restauration', 'error');
+    } finally {
+      setRestoringDb(false);
+    }
+  };
+
   // Sport actions
   const openSportModal = (sport?: Sport) => {
     if (sport) {
@@ -183,17 +389,39 @@ export default function SettingsPage() {
       setSportForm({
         name: sport.name,
         description: sport.description || '',
-        default_single_session_price: sport.default_single_session_price || '50'
+        default_single_session_price: sport.default_single_session_price || '50',
+        is_active: Boolean(sport.is_active)
       });
     } else {
       setEditingSport(null);
       setSportForm({
         name: '',
         description: '',
-        default_single_session_price: '50'
+        default_single_session_price: '50',
+        is_active: true
       });
     }
     setSportModalOpen(true);
+  };
+
+  const handleToggleSportStatus = async (sport: Sport) => {
+    const newStatus = !sport.is_active;
+    try {
+      const res = await fetch('/api/sports', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sport.id, is_active: newStatus })
+      });
+      if (res.ok) {
+        showToast(`Discipline "${sport.name}" ${newStatus ? 'activée' : 'désactivée'} avec succès`, 'success');
+        fetchSports();
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Erreur lors du changement de statut', 'error');
+      }
+    } catch (err) {
+      showToast('Erreur inattendue', 'error');
+    }
   };
 
   const handleSaveSport = async (e: React.FormEvent) => {
@@ -231,9 +459,17 @@ export default function SettingsPage() {
   };
 
   const handleDeleteSport = async (sport: Sport) => {
+    if (sport.linked_offers_count > 0) {
+      showToast(
+        `Suppression impossible : "${sport.name}" est utilisée dans ${sport.linked_offers_count} formule(s) d'abonnement (offer_sports). Vous pouvez la désactiver à la place.`,
+        'error'
+      );
+      return;
+    }
+
     const isConfirmed = await confirm({
       title: 'Supprimer la discipline',
-      message: `Voulez-vous vraiment supprimer "${sport.name}" ? Si des séances ou offres y sont reliées, elle sera simplement désactivée.`,
+      message: `Voulez-vous vraiment supprimer "${sport.name}" ? Si cette discipline ne peut pas être supprimée, vous pouvez la désactiver à tout moment.`,
       confirmText: 'Supprimer',
       cancelText: 'Annuler',
       isDestructive: true
@@ -247,7 +483,8 @@ export default function SettingsPage() {
         showToast('Discipline supprimée', 'success');
         fetchSports();
       } else {
-        showToast('Erreur lors de la suppression', 'error');
+        const err = await res.json();
+        showToast(err.error || 'Erreur lors de la suppression', 'error');
       }
     } catch (err) {
       showToast('Erreur inattendue', 'error');
@@ -265,7 +502,8 @@ export default function SettingsPage() {
         duration_type: offer.duration_type,
         duration_value: offer.duration_value,
         sessions_count: offer.sessions_count ? String(offer.sessions_count) : '',
-        sport_ids: offer.sport_ids || []
+        sport_ids: offer.sport_ids || [],
+        is_active: Boolean(offer.is_active)
       });
     } else {
       setEditingOffer(null);
@@ -276,10 +514,31 @@ export default function SettingsPage() {
         duration_type: 'standard_month',
         duration_value: 1,
         sessions_count: '',
-        sport_ids: sports.length > 0 ? [sports[0].id] : []
+        sport_ids: sports.filter(s => s.is_active).length > 0 ? [sports.filter(s => s.is_active)[0].id] : [],
+        is_active: true
       });
     }
     setOfferModalOpen(true);
+  };
+
+  const handleToggleOfferStatus = async (offer: Offer) => {
+    const newStatus = !offer.is_active;
+    try {
+      const res = await fetch('/api/offers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: offer.id, is_active: newStatus })
+      });
+      if (res.ok) {
+        showToast(`Formule "${offer.title}" ${newStatus ? 'activée' : 'désactivée'} avec succès`, 'success');
+        fetchOffers();
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Erreur lors du changement de statut', 'error');
+      }
+    } catch (err) {
+      showToast('Erreur inattendue', 'error');
+    }
   };
 
   const handleToggleSportInOffer = (sportId: number) => {
@@ -333,6 +592,14 @@ export default function SettingsPage() {
   };
 
   const handleDeleteOffer = async (offer: Offer) => {
+    if (offer.sport_ids && offer.sport_ids.length > 0) {
+      showToast(
+        `Suppression impossible : la formule "${offer.title}" est associée à des disciplines (offer_sports). Vous pouvez la désactiver à la place.`,
+        'error'
+      );
+      return;
+    }
+
     const isConfirmed = await confirm({
       title: 'Supprimer l\'offre',
       message: `Voulez-vous supprimer la formule "${offer.title}" ?`,
@@ -349,7 +616,8 @@ export default function SettingsPage() {
         showToast('Offre supprimée', 'success');
         fetchOffers();
       } else {
-        showToast('Erreur lors de la suppression', 'error');
+        const err = await res.json();
+        showToast(err.error || 'Erreur lors de la suppression', 'error');
       }
     } catch (err) {
       showToast('Erreur inattendue', 'error');
@@ -479,7 +747,7 @@ export default function SettingsPage() {
               Paramètres & Configuration de la Salle
             </h1>
             <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-              Gérez les disciplines sportives, formules d'abonnement, comptes utilisateurs et sécurité des postes.
+              Gérez l'identité de la salle, les disciplines, les formules d'abonnement, les utilisateurs et la sauvegarde de la base de données.
             </p>
           </div>
         </div>
@@ -487,8 +755,46 @@ export default function SettingsPage() {
 
       {/* Redesigned Section Selector Under the Title */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          {/* Option 1: Disciplines */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {/* Option 1: Identité & Salle */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`group flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left ${
+              activeTab === 'general'
+                ? 'bg-blue-50/80 border-blue-300 text-blue-900 shadow-xs ring-1 ring-blue-200/50'
+                : 'bg-slate-50/50 border-transparent hover:bg-slate-100/80 hover:border-slate-200 text-slate-600'
+            }`}
+          >
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                activeTab === 'general'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'bg-white text-slate-500 border border-slate-200 group-hover:text-blue-600 group-hover:border-blue-200'
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-sm truncate">Identité</span>
+                <span
+                  className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
+                    activeTab === 'general'
+                      ? 'bg-blue-200/70 text-blue-800'
+                      : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  Salle
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                Nom, contact & logos
+              </p>
+            </div>
+          </button>
+
+          {/* Option 2: Disciplines */}
           <button
             type="button"
             onClick={() => setActiveTab('sports')}
@@ -526,7 +832,7 @@ export default function SettingsPage() {
             </div>
           </button>
 
-          {/* Option 2: Formules */}
+          {/* Option 3: Formules */}
           <button
             type="button"
             onClick={() => setActiveTab('offers')}
@@ -564,7 +870,7 @@ export default function SettingsPage() {
             </div>
           </button>
 
-          {/* Option 3: Utilisateurs */}
+          {/* Option 4: Utilisateurs */}
           <button
             type="button"
             onClick={() => setActiveTab('users')}
@@ -602,7 +908,7 @@ export default function SettingsPage() {
             </div>
           </button>
 
-          {/* Option 4: Postes & Appareils */}
+          {/* Option 5: Postes & Appareils */}
           <button
             type="button"
             onClick={() => setActiveTab('devices')}
@@ -639,8 +945,410 @@ export default function SettingsPage() {
               </p>
             </div>
           </button>
+
+          {/* Option 6: Base de Données */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('database')}
+            className={`group flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left ${
+              activeTab === 'database'
+                ? 'bg-blue-50/80 border-blue-300 text-blue-900 shadow-xs ring-1 ring-blue-200/50'
+                : 'bg-slate-50/50 border-transparent hover:bg-slate-100/80 hover:border-slate-200 text-slate-600'
+            }`}
+          >
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                activeTab === 'database'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'bg-white text-slate-500 border border-slate-200 group-hover:text-blue-600 group-hover:border-blue-200'
+              }`}
+            >
+              <Database className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-sm truncate">Données</span>
+                <span
+                  className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${
+                    activeTab === 'database'
+                      ? 'bg-blue-200/70 text-blue-800'
+                      : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  SQL
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                Export & Sauvegarde
+              </p>
+            </div>
+          </button>
         </div>
       </div>
+
+      {/* TAB: IDENTITE & SALLE */}
+      {activeTab === 'general' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                Identité & Coordonnées de la Salle
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Configurez le nom officiel de votre établissement, vos coordonnées et vos logos & visuels pour les badges et impressions.
+              </p>
+            </div>
+            <button
+              type="submit"
+              form="gym-settings-form"
+              disabled={savingGeneral}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all text-xs sm:text-sm disabled:opacity-50 cursor-pointer"
+            >
+              {savingGeneral ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Enregistrement...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" /> Enregistrer les Paramètres
+                </>
+              )}
+            </button>
+          </div>
+
+          <form id="gym-settings-form" onSubmit={handleSaveGeneral} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Colonne Gauche: Informations textuelles */}
+            <div className="lg:col-span-7 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-5">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-slate-500" />
+                  Informations Générales
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Ces coordonnées s'affichent sur les reçus, cartes d'adhérents et l'application.
+                </p>
+              </div>
+
+              {/* Champ 1: Nom de la salle */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                  Nom de la salle <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={gymForm.gym_name}
+                    onChange={(e) => setGymForm({ ...gymForm, gym_name: e.target.value })}
+                    placeholder="Ex: FitVault Gym, Club Fitness Pro..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all font-medium text-sm"
+                    required
+                  />
+                  <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Champ 2: Téléphone */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                  Téléphone de contact
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={gymForm.phone}
+                    onChange={(e) => setGymForm({ ...gymForm, phone: e.target.value })}
+                    placeholder="Ex: 0550 12 34 56 / 0770 98 76 54"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all font-medium text-sm"
+                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Champ 3: Facebook */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wide">
+                  Page / Profil Facebook
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={gymForm.facebook}
+                    onChange={(e) => setGymForm({ ...gymForm, facebook: e.target.value })}
+                    placeholder="Ex: facebook.com/fitvaultgym ou FitVault Gym Officiel"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all font-medium text-sm"
+                  />
+                  <div className="w-4 h-4 text-blue-600 absolute left-3.5 top-3.5 pointer-events-none flex items-center justify-center">
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Colonne Droite: Visuels & Logos (Logo de la salle + Image pour Badge) */}
+            <div className="lg:col-span-5 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                  Visuels & Médias Locaux
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Images stockées localement sur le serveur.
+                </p>
+              </div>
+
+              {/* Image 1: Logo de la salle */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    1. Logo de la Salle
+                  </label>
+                  {logoPreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogoPreview(null);
+                        setSelectedLogoFile(null);
+                        if (logoFileInputRef.current) logoFileInputRef.current.value = '';
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner relative group">
+                    {logoPreview ? (
+                      <img
+                        src={logoPreview}
+                        alt="Logo de la salle"
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-400 text-center p-2">
+                        <ImageIcon className="w-8 h-8 text-slate-300 mb-1" />
+                        <span className="text-[10px] font-bold">Aucun logo</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      ref={logoFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoFileChange}
+                      className="hidden"
+                      id="logo-upload"
+                    />
+                    <label
+                      htmlFor="logo-upload"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all border border-slate-200/80 shadow-xs"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {logoPreview ? 'Changer le logo' : 'Choisir un logo'}
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Format recommandé : PNG ou JPG avec fond transparent.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Image 2: Image pour Badge */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    2. Image pour Badges & Cartes
+                  </label>
+                  {badgePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBadgePreview(null);
+                        setSelectedBadgeFile(null);
+                        if (badgeFileInputRef.current) badgeFileInputRef.current.value = '';
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner relative group">
+                    {badgePreview ? (
+                      <img
+                        src={badgePreview}
+                        alt="Badge de la salle"
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-400 text-center p-2">
+                        <Tag className="w-8 h-8 text-slate-300 mb-1" />
+                        <span className="text-[10px] font-bold">Aucun badge</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <input
+                      ref={badgeFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBadgeFileChange}
+                      className="hidden"
+                      id="badge-upload"
+                    />
+                    <label
+                      htmlFor="badge-upload"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-all border border-slate-200/80 shadow-xs"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {badgePreview ? 'Changer l\'image du badge' : 'Choisir image badge'}
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Utilisée pour l'impression des cartes et badges d'accès adhérents.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Colonne Pleine Largeur: Modèle de Badge / Format d'Impression */}
+            <div className="lg:col-span-12 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-slate-500" />
+                  Format & Modèle de Badge Adhérent (Impression)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Sélectionnez le modèle graphique utilisé pour la génération et l'impression des badges membres.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Choix 1: Modèle Standard */}
+                <div
+                  onClick={() => setBadgeTemplate('standard')}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                    badgeTemplate === 'standard'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-1 ring-blue-500/20'
+                      : 'border-slate-200 bg-slate-50/30 hover:border-slate-300 hover:bg-slate-50/70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        badgeTemplate === 'standard' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        1
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">Modèle Standard</h4>
+                        <p className="text-[11px] text-slate-500">Design moderne FitVault Club</p>
+                      </div>
+                    </div>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                      badgeTemplate === 'standard'
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-300 bg-white'
+                    }`}>
+                      {badgeTemplate === 'standard' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Design contemporain épuré avec branding FitVault, photo de l'adhérent, puce d'état de l'abonnement et grand code-barres horizontal.
+                  </p>
+
+                  {/* Mini Preview Box */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-2.5 shadow-inner flex flex-col justify-between h-24">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                      <span className="font-black text-[10px] text-slate-800 tracking-wider">FIT<span className="text-blue-600">VAULT</span></span>
+                      <span className="text-[8px] font-bold text-blue-600 uppercase">CARTE MEMBRE</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-[7px] text-slate-400">Photo</div>
+                      <div className="text-[9px]">
+                        <p className="font-bold text-slate-800">Nom & Prénom</p>
+                        <p className="text-[8px] text-emerald-600 font-semibold">• Abonnement Actif</p>
+                      </div>
+                    </div>
+                    <div className="h-4 bg-slate-100 rounded flex items-center justify-center font-mono text-[8px] text-slate-400">
+                      |||||| |||| ||||||| 1001
+                    </div>
+                  </div>
+                </div>
+
+                {/* Choix 2: Modèle Chokri */}
+                <div
+                  onClick={() => setBadgeTemplate('chokri')}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                    badgeTemplate === 'chokri'
+                      ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-1 ring-blue-500/20'
+                      : 'border-slate-200 bg-slate-50/30 hover:border-slate-300 hover:bg-slate-50/70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${
+                        badgeTemplate === 'chokri' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        2
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">Modèle Chokri</h4>
+                        <p className="text-[11px] text-slate-500">Format Carte d'Adhérent bicolore</p>
+                      </div>
+                    </div>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                      badgeTemplate === 'chokri'
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-slate-300 bg-white'
+                    }`}>
+                      {badgeTemplate === 'chokri' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Titre officiel <strong>CARTE D'ADHERENT</strong>, bandes bicolores rouge & verte, photo encadrée, <strong>Nom</strong>, <strong>DN</strong> (Date de Naissance), <strong>ADR</strong> (Adresse) et code-barres.
+                  </p>
+
+                  {/* Mini Preview Box */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-2 shadow-inner flex flex-col justify-between h-24 overflow-hidden relative">
+                    <div className="flex items-center justify-between pb-1">
+                      <div className="w-3.5 h-3.5 rounded-sm bg-slate-200"></div>
+                      <span className="font-black text-[9px] text-black tracking-wide">CARTE D'ADHERENT</span>
+                      <div className="w-3.5 h-3.5 rounded-sm bg-slate-200"></div>
+                    </div>
+                    <div className="w-full space-y-[1px]">
+                      <div className="h-1 bg-red-600 w-full"></div>
+                      <div className="h-1 bg-green-600 w-full"></div>
+                    </div>
+                    <div className="flex items-center justify-between gap-1 pt-1">
+                      <div className="w-6 h-6 rounded border border-black bg-slate-100 flex items-center justify-center text-[6px]">Photo</div>
+                      <div className="text-[7px] font-bold text-black flex-1 pl-1">
+                        <p>Nom : ...</p>
+                        <p>DN : ...</p>
+                        <p>ADR : ...</p>
+                      </div>
+                      <div className="h-6 w-14 bg-slate-100 border border-slate-200 rounded flex items-center justify-center font-mono text-[6px]">
+                        |||||||||||
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* TAB 1: SPORTS */}
       {activeTab === 'sports' && (
@@ -674,9 +1382,19 @@ export default function SettingsPage() {
                   <div>
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="text-lg font-bold text-slate-900">{sport.name}</h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${sport.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSportStatus(sport)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                          sport.is_active 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                            : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                        }`}
+                        title={sport.is_active ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${sport.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                         {sport.is_active ? 'Actif' : 'Inactif'}
-                      </span>
+                      </button>
                     </div>
                     {sport.description && (
                       <p className="text-slate-500 text-sm mb-4 line-clamp-2">{sport.description}</p>
@@ -693,7 +1411,28 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleToggleSportStatus(sport)}
+                      className={`p-2 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold ${
+                        sport.is_active
+                          ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+                          : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                      }`}
+                      title={sport.is_active ? 'Désactiver la discipline' : 'Activer la discipline'}
+                    >
+                      {sport.is_active ? (
+                        <>
+                          <PowerOff className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Désactiver</span>
+                        </>
+                      ) : (
+                        <>
+                          <Power className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Activer</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={() => openSportModal(sport)}
                       className="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
@@ -703,8 +1442,16 @@ export default function SettingsPage() {
                     </button>
                     <button
                       onClick={() => handleDeleteSport(sport)}
-                      className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors"
-                      title="Supprimer"
+                      className={`p-2 rounded-lg transition-colors ${
+                        sport.linked_offers_count > 0
+                          ? 'text-slate-300 hover:bg-slate-50 cursor-not-allowed'
+                          : 'hover:bg-red-50 text-red-500'
+                      }`}
+                      title={
+                        sport.linked_offers_count > 0
+                          ? `Suppression bloquée : liée à ${sport.linked_offers_count} formule(s) (offer_sports)`
+                          : 'Supprimer'
+                      }
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -747,7 +1494,24 @@ export default function SettingsPage() {
                 >
                   <div>
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg font-bold text-slate-900">{offer.title}</h3>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{offer.title}</h3>
+                        <div className="mt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleOfferStatus(offer)}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all shadow-xs cursor-pointer ${
+                              offer.is_active 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                            }`}
+                            title={offer.is_active ? 'Cliquer pour désactiver' : 'Cliquer pour activer'}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${offer.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                            {offer.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        </div>
+                      </div>
                       <span className="text-xl font-extrabold text-blue-600">
                         {offer.price} <span className="text-xs font-semibold text-slate-500">DA</span>
                       </span>
@@ -790,7 +1554,28 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleToggleOfferStatus(offer)}
+                      className={`p-2 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold ${
+                        offer.is_active
+                          ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+                          : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                      }`}
+                      title={offer.is_active ? 'Désactiver la formule' : 'Activer la formule'}
+                    >
+                      {offer.is_active ? (
+                        <>
+                          <PowerOff className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Désactiver</span>
+                        </>
+                      ) : (
+                        <>
+                          <Power className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Activer</span>
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={() => openOfferModal(offer)}
                       className="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
@@ -800,8 +1585,16 @@ export default function SettingsPage() {
                     </button>
                     <button
                       onClick={() => handleDeleteOffer(offer)}
-                      className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors"
-                      title="Supprimer"
+                      className={`p-2 rounded-lg transition-colors ${
+                        offer.sport_ids && offer.sport_ids.length > 0
+                          ? 'text-slate-300 hover:bg-slate-50 cursor-not-allowed'
+                          : 'hover:bg-red-50 text-red-500'
+                      }`}
+                      title={
+                        offer.sport_ids && offer.sport_ids.length > 0
+                          ? 'Suppression bloquée : liée à des disciplines sportives (offer_sports)'
+                          : 'Supprimer'
+                      }
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -991,6 +1784,182 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* TAB: BASE DE DONNEES & SAUVEGARDE */}
+      {activeTab === 'database' && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Database className="w-5 h-5 text-blue-600" />
+              Sauvegarde & Restauration de la Base de Données
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Exportez une copie de sécurité intégrale de votre système ou restaurez vos données à partir d'un fichier SQL sélectionné.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Action 1: Sauvegarde / Export */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-xs">
+                    <Download className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      1. Sauvegarder la Base de Données
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Générer et télécharger un fichier de sauvegarde (.sql)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-100/80 text-xs text-emerald-900 space-y-2 mb-4">
+                  <div className="flex items-center gap-2 font-bold text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Contenu complet de la sauvegarde :
+                  </div>
+                  <ul className="list-disc list-inside text-emerald-700/90 space-y-1 pl-1">
+                    <li>Tous les membres et leurs dossiers complets</li>
+                    <li>Historique des abonnements, formules et inscriptions</li>
+                    <li>Historique complet des pointages et présences</li>
+                    <li>Gestion des dettes, paiements et transactions de caisse</li>
+                    <li>Articles, ventes et approvisionnements du shop</li>
+                    <li>Comptes utilisateurs, postes et configuration de la salle</li>
+                  </ul>
+                </div>
+
+                <p className="text-xs text-slate-500">
+                  Il est vivement conseillé d'effectuer une sauvegarde régulière sur un support externe (clé USB ou disque dur) afin de sécuriser vos données en cas de panne matérielle.
+                </p>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleExportDatabase}
+                  disabled={exportingDb}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {exportingDb ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Génération du fichier en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Télécharger la Sauvegarde (.sql)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Action 2: Restauration / Import */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shadow-xs">
+                    <FolderUp className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      2. Restaurer la Base de Données
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Restaurer les données à partir d'un fichier .sql choisi
+                    </p>
+                  </div>
+                </div>
+
+                {/* Avertissement de sécurité */}
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 text-xs text-amber-900 space-y-1.5 mb-4">
+                  <div className="flex items-center gap-2 font-bold text-amber-800">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    Attention : Action Irréversible
+                  </div>
+                  <p className="text-amber-800/90 leading-relaxed">
+                    La restauration d'une sauvegarde <strong>remplacera l'intégralité</strong> des données actuelles par les données du fichier sélectionné.
+                  </p>
+                </div>
+
+                {/* Sélecteur de fichier */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    Sélectionner le fichier SQL (.sql)
+                  </label>
+                  <input
+                    ref={restoreFileInputRef}
+                    type="file"
+                    accept=".sql"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setSelectedRestoreFile(file);
+                      }
+                    }}
+                    className="hidden"
+                    id="sql-file-restore"
+                  />
+                  <div
+                    onClick={() => restoreFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                      selectedRestoreFile
+                        ? 'border-blue-400 bg-blue-50/50 text-blue-900'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-slate-50 text-slate-500'
+                    }`}
+                  >
+                    <FileText className={`w-8 h-8 ${selectedRestoreFile ? 'text-blue-600' : 'text-slate-400'}`} />
+                    {selectedRestoreFile ? (
+                      <div className="text-xs">
+                        <p className="font-bold text-blue-900 truncate max-w-[280px]">
+                          {selectedRestoreFile.name}
+                        </p>
+                        <p className="text-[11px] text-blue-600 mt-0.5">
+                          {(selectedRestoreFile.size / 1024).toFixed(1)} Ko - Cliquez pour changer
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-xs">
+                        <p className="font-semibold text-slate-700">
+                          Cliquez pour choisir un fichier .sql
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Fichiers d'export FitVault uniquement
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleRestoreDatabase}
+                  disabled={restoringDb || !selectedRestoreFile}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {restoringDb ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Restauration en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Restaurer la Base de Données
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: SPORT FORM */}
       {sportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4">
@@ -1052,6 +2021,19 @@ export default function SettingsPage() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all h-20 resize-none"
                 />
               </div>
+
+              <label className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-all">
+                <input
+                  type="checkbox"
+                  checked={sportForm.is_active}
+                  onChange={(e) => setSportForm({ ...sportForm, is_active: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-800">Discipline Active</span>
+                  <p className="text-[11px] text-slate-500">Activez ou désactivez cette discipline à tout moment. Si désactivée, elle ne sera pas proposée pour les nouvelles séances.</p>
+                </div>
+              </label>
 
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -1213,6 +2195,19 @@ export default function SettingsPage() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all h-20 resize-none"
                 />
               </div>
+
+              <label className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70 transition-all">
+                <input
+                  type="checkbox"
+                  checked={offerForm.is_active}
+                  onChange={(e) => setOfferForm({ ...offerForm, is_active: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-800">Formule Active</span>
+                  <p className="text-[11px] text-slate-500">Activez ou désactivez cette formule à tout moment. Si désactivée, elle sera masquée lors des nouvelles souscriptions d'abonnements.</p>
+                </div>
+              </label>
 
               <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 pt-4 border-t border-slate-100">
                 <button

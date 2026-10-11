@@ -10,7 +10,8 @@ export function proxy(request: NextRequest) {
   const isPublicStatic = 
     pathname.startsWith('/_next') || 
     pathname.startsWith('/favicon.ico') || 
-    pathname.startsWith('/uploads');
+    pathname.startsWith('/uploads') ||
+    pathname.startsWith('/photo');
 
   if (isPublicStatic) {
     return NextResponse.next();

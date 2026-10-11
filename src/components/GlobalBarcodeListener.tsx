@@ -14,6 +14,7 @@ import {
   CreditCard 
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
 
 export function GlobalBarcodeListener() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export function GlobalBarcodeListener() {
   const [scannedMember, setScannedMember] = useState<any | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [photoError, setPhotoError] = useState(false);
 
   // Barcode keystroke buffer
   const bufferRef = useRef<string>('');
@@ -30,9 +32,19 @@ export function GlobalBarcodeListener() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept barcodes on the vente / POS page (it handles its own scanning)
+      if (pathname?.includes('/vente')) {
+        bufferRef.current = '';
+        return;
+      }
+
       // Ignore if user is currently typing in an input or textarea
       const target = e.target as HTMLElement;
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (isInput) {
+        bufferRef.current = '';
+        return;
+      }
 
       const currentTime = Date.now();
       const timeDiff = currentTime - lastKeyTimeRef.current;
@@ -77,13 +89,17 @@ export function GlobalBarcodeListener() {
       );
 
       if (found) {
+        playScanSuccessSound();
+        setPhotoError(false);
         setScannedMember(found);
         setModalOpen(true);
         showToast(`Code-barres détecté : ${found.first_name} ${found.last_name}`, 'info');
       } else if (!pathname?.includes('/boutique') && !pathname?.includes('/vente') && !pathname?.includes('/produits') && !pathname?.includes('/products')) {
+        playScanErrorSound();
         showToast(`Aucun membre trouvé pour le code : ${barcode}`, 'warning');
       }
     } catch (err) {
+      playScanErrorSound();
       console.error('Barcode lookup error:', err);
     }
   };
@@ -101,7 +117,10 @@ export function GlobalBarcodeListener() {
       const data = await res.json();
 
       if (res.ok) {
+        playScanSuccessSound();
         if (data.alreadyPresent) {
+          showToast(data.message, 'info');
+        } else if (data.departed) {
           showToast(data.message, 'info');
         } else if (data.isDebtSession) {
           showToast(data.message, 'warning');
@@ -110,9 +129,11 @@ export function GlobalBarcodeListener() {
         }
         setModalOpen(false);
       } else {
+        playScanErrorSound();
         showToast(data.error || 'Erreur lors du pointage', 'error');
       }
     } catch (err) {
+      playScanErrorSound();
       showToast('Erreur inattendue', 'error');
     } finally {
       setLoadingAction(false);
@@ -148,10 +169,18 @@ export function GlobalBarcodeListener() {
         {/* Member preview card */}
         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-5">
           <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shadow-xs flex-shrink-0">
-            {scannedMember.photo_url ? (
-              <img src={scannedMember.photo_url} alt="" className="w-full h-full object-cover" />
+            {scannedMember.photo_url && !photoError ? (
+              <img 
+                src={scannedMember.photo_url} 
+                alt="" 
+                className="w-full h-full object-cover" 
+                onError={() => setPhotoError(true)}
+              />
             ) : (
-              <User className="w-8 h-8 text-slate-300" />
+              <div className="flex flex-col items-center justify-center p-1 text-center w-full h-full bg-slate-100">
+                <User className="w-7 h-7 text-slate-300" />
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Indisponible</span>
+              </div>
             )}
           </div>
           <div className="flex-1 min-w-0">

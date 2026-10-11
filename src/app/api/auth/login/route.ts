@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
       deviceUuid = stableUuid;
     }
 
-    // Check if device_uuid exists in DB for this user
-    const [deviceRows]: any = await db.query('SELECT * FROM user_devices WHERE device_uuid = ? AND user_id = ?', [deviceUuid, user.id]);
+    // Check if device_uuid exists in DB (regardless of which user registered it)
+    const [deviceRows]: any = await db.query('SELECT * FROM user_devices WHERE device_uuid = ?', [deviceUuid]);
     
     if (deviceRows.length === 0) {
       return NextResponse.json({ 
@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
     // Update last_active_at
     await db.query('UPDATE user_devices SET last_active_at = NOW() WHERE id = ?', [deviceRows[0].id]);
 
-    // Success - Generate session
+    // Success - Generate session (1 year persistent session)
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 90 * 60 * 1000); // 90 mins hard timeout
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
     
     await db.query(
       'INSERT INTO user_sessions (session_token, user_id, device_id, expires_at) VALUES (?, ?, ?, ?)',
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({ success: true });
     
-    // Set HTTP-only cookie for session
+    // Set HTTP-only cookie for session (1 year persistent)
     response.cookies.set({
       name: 'fitvault_session',
       value: sessionToken,
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       path: '/',
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 90 * 60, // 90 mins
+      maxAge: 365 * 24 * 60 * 60, // 1 year
     });
     
     return response;

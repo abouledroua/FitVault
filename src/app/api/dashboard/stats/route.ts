@@ -55,9 +55,11 @@ export async function GET() {
         a.id,
         a.checked_in_at,
         a.is_debt_session,
+        m.id as member_id,
         m.first_name,
         m.last_name,
         m.barcode,
+        m.photo_url as photo,
         s.name as sport_name
       FROM attendance_logs a
       JOIN members m ON a.member_id = m.id
@@ -68,8 +70,10 @@ export async function GET() {
 
     const formattedLogs = recentLogs.map(r => ({
       id: r.id,
+      memberId: r.member_id,
       name: `${r.first_name} ${r.last_name}`,
       barcode: r.barcode,
+      photo: r.photo,
       sportName: r.sport_name || 'Entraînement',
       isDebtSession: Boolean(r.is_debt_session),
       time: formatTime(r.checked_in_at)

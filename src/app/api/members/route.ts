@@ -9,12 +9,17 @@ export async function GET() {
     const db = await getDbConnection();
     const [rows] = await db.query<RowDataPacket[]>(`
       SELECT m.*,
-        (SELECT COUNT(*) FROM product_sales WHERE member_id = m.id) AS sales_count,
-        (SELECT COUNT(*) FROM inscriptions WHERE member_id = m.id) AS inscriptions_count,
-        (SELECT COUNT(*) FROM attendance_logs WHERE member_id = m.id) AS attendance_count,
-        (SELECT COUNT(*) FROM caisse_transactions WHERE member_id = m.id) AS caisse_count,
-        (SELECT COUNT(*) FROM member_debts WHERE member_id = m.id) AS debts_count
-      FROM members m 
+        COALESCE(ps.cnt, 0) AS sales_count,
+        COALESCE(i.cnt, 0) AS inscriptions_count,
+        COALESCE(a.cnt, 0) AS attendance_count,
+        COALESCE(c.cnt, 0) AS caisse_count,
+        COALESCE(d.cnt, 0) AS debts_count
+      FROM members m
+      LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM product_sales GROUP BY member_id) ps ON ps.member_id = m.id
+      LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM inscriptions GROUP BY member_id) i ON i.member_id = m.id
+      LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM attendance_logs GROUP BY member_id) a ON a.member_id = m.id
+      LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM caisse_transactions WHERE member_id IS NOT NULL GROUP BY member_id) c ON c.member_id = m.id
+      LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM member_debts GROUP BY member_id) d ON d.member_id = m.id
       ORDER BY m.created_at DESC
     `);
     return NextResponse.json(rows);
@@ -68,10 +73,19 @@ export async function POST(request: Request) {
       }
     }
     
+    const initial_debt = Math.max(0, parseFloat((formData.get('initial_debt') as string) || '0') || 0);
+
     const [result]: any = await db.query(
-      'INSERT INTO members (barcode, first_name, last_name, phone, email, emergency_contact, photo_url, gender, date_of_birth, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [finalBarcode, first_name, last_name, phone || null, email || null, emergency_contact || null, photo_url, gender || null, date_of_birth || null, address || null]
+      'INSERT INTO members (barcode, first_name, last_name, phone, email, emergency_contact, photo_url, gender, date_of_birth, address, initial_debt, total_debt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [finalBarcode, first_name || '', last_name || '', phone || '', email || null, emergency_contact || null, photo_url, gender || null, date_of_birth || null, address || null, initial_debt, initial_debt]
     );
+
+    if (initial_debt > 0) {
+      await db.query(
+        "INSERT INTO member_debts (member_id, amount, reason, status) VALUES (?, ?, 'Solde initial / Dette antérieure', 'unpaid')",
+        [result.insertId, initial_debt]
+      );
+    }
     
     return NextResponse.json({ id: result.insertId, barcode: finalBarcode }, { status: 201 });
   } catch (error) {

@@ -9,64 +9,69 @@ export async function GET(request: Request, context: any) {
     const id = resolvedParams.id;
     const db = await getDbConnection();
     
-    const [members]: any = await db.query('SELECT * FROM members WHERE id = ?', [id]);
+    const [
+      [members],
+      [inscriptions],
+      [attendance],
+      [debts],
+      [caissePayments]
+    ]: any = await Promise.all([
+      db.query('SELECT * FROM members WHERE id = ?', [id]),
+      db.query(`
+        SELECT 
+          i.*,
+          o.title as offer_title,
+          o.price as offer_price,
+          o.duration_type,
+          o.duration_value,
+          o.sessions_count,
+          GROUP_CONCAT(s.name SEPARATOR ', ') as sports_included
+        FROM inscriptions i
+        JOIN offers o ON i.offer_id = o.id
+        LEFT JOIN offer_sports os ON o.id = os.offer_id
+        LEFT JOIN sports s ON os.sport_id = s.id
+        WHERE i.member_id = ?
+        GROUP BY i.id
+        ORDER BY i.start_date DESC
+      `, [id]),
+      db.query(`
+        SELECT 
+          a.id,
+          a.checked_in_at,
+          a.checked_out_at,
+          a.status,
+          a.is_debt_session,
+          s.name as sport_name,
+          d.amount as debt_amount
+        FROM attendance_logs a
+        LEFT JOIN sports s ON a.sport_id = s.id
+        LEFT JOIN member_debts d ON a.debt_id = d.id
+        WHERE a.member_id = ? 
+        ORDER BY a.checked_in_at DESC
+      `, [id]),
+      db.query('SELECT * FROM member_debts WHERE member_id = ? ORDER BY incurred_at DESC', [id]),
+      db.query(`
+        SELECT 
+          c.id,
+          c.flow_direction,
+          c.module_category,
+          c.transaction_type,
+          c.amount,
+          c.transaction_date,
+          c.motif,
+          c.note,
+          c.related_id,
+          u.full_name as user_name
+        FROM caisse_transactions c
+        LEFT JOIN users u ON c.user_id = u.id
+        WHERE c.member_id = ? AND c.flow_direction = 'in'
+        ORDER BY c.transaction_date DESC
+      `, [id])
+    ]);
+
     if (!members || members.length === 0) {
       return NextResponse.json({ error: 'Membre introuvable' }, { status: 404 });
     }
-    
-    const [inscriptions]: any = await db.query(`
-      SELECT 
-        i.*,
-        o.title as offer_title,
-        o.price as offer_price,
-        o.duration_type,
-        o.duration_value,
-        o.sessions_count,
-        GROUP_CONCAT(s.name SEPARATOR ', ') as sports_included
-      FROM inscriptions i
-      JOIN offers o ON i.offer_id = o.id
-      LEFT JOIN offer_sports os ON o.id = os.offer_id
-      LEFT JOIN sports s ON os.sport_id = s.id
-      WHERE i.member_id = ?
-      GROUP BY i.id
-      ORDER BY i.start_date DESC
-    `, [id]);
-
-    const [attendance]: any = await db.query(`
-      SELECT 
-        a.id,
-        a.checked_in_at,
-        a.checked_out_at,
-        a.status,
-        a.is_debt_session,
-        s.name as sport_name,
-        d.amount as debt_amount
-      FROM attendance_logs a
-      LEFT JOIN sports s ON a.sport_id = s.id
-      LEFT JOIN member_debts d ON a.debt_id = d.id
-      WHERE a.member_id = ? 
-      ORDER BY a.checked_in_at DESC
-    `, [id]);
-
-    const [debts]: any = await db.query('SELECT * FROM member_debts WHERE member_id = ? ORDER BY incurred_at DESC', [id]);
-
-    const [caissePayments]: any = await db.query(`
-      SELECT 
-        c.id,
-        c.flow_direction,
-        c.module_category,
-        c.transaction_type,
-        c.amount,
-        c.transaction_date,
-        c.motif,
-        c.note,
-        c.related_id,
-        u.full_name as user_name
-      FROM caisse_transactions c
-      LEFT JOIN users u ON c.user_id = u.id
-      WHERE c.member_id = ? AND c.flow_direction = 'in'
-      ORDER BY c.transaction_date DESC
-    `, [id]);
 
     // Consolidate payments: include any paid subscriptions that don't have a caisse_transactions record
     const recordedInscriptionIds = new Set(
@@ -140,8 +145,44 @@ export async function PUT(request: Request, context: any) {
     
     const photo = formData.get('photo') as File;
     let photoQueryPart = '';
-    let queryParams: any[] = [barcode, first_name, last_name, phone || null, email || null, emergency_contact || null, gender || null, date_of_birth || null, address || null];
+    let queryParams: any[] = [barcode, first_name || '', last_name || '', phone || '', email || null, emergency_contact || null, gender || null, date_of_birth || null, address || null];
     
+    const initial_debt_raw = formData.get('initial_debt');
+    let debtQueryPart = '';
+    if (initial_debt_raw !== null && initial_debt_raw !== undefined) {
+      const newInitialDebt = Math.max(0, parseFloat((initial_debt_raw as string) || '0') || 0);
+      const [existing]: any = await db.query('SELECT initial_debt, total_debt FROM members WHERE id = ?', [id]);
+      if (existing && existing.length > 0) {
+        const oldInitialDebt = parseFloat(existing[0].initial_debt || '0') || 0;
+        const currentTotalDebt = parseFloat(existing[0].total_debt || '0') || 0;
+        const diff = newInitialDebt - oldInitialDebt;
+        const newTotalDebt = Math.max(0, currentTotalDebt + diff);
+
+        debtQueryPart = ', initial_debt = ?, total_debt = ?';
+        queryParams.push(newInitialDebt, newTotalDebt);
+
+        // Keep member_debts synchronized for the initial debt line item
+        const [existingDebtRows]: any = await db.query(
+          "SELECT id FROM member_debts WHERE member_id = ? AND (reason LIKE '%initial%' OR reason LIKE '%antérieur%') LIMIT 1",
+          [id]
+        );
+
+        if (existingDebtRows && existingDebtRows.length > 0) {
+          const debtRowId = existingDebtRows[0].id;
+          if (newInitialDebt > 0) {
+            await db.query('UPDATE member_debts SET amount = ? WHERE id = ?', [newInitialDebt, debtRowId]);
+          } else {
+            await db.query('DELETE FROM member_debts WHERE id = ?', [debtRowId]);
+          }
+        } else if (newInitialDebt > 0) {
+          await db.query(
+            "INSERT INTO member_debts (member_id, amount, reason, status) VALUES (?, ?, 'Solde initial / Dette antérieure', 'unpaid')",
+            [id, newInitialDebt]
+          );
+        }
+      }
+    }
+
     if (photo && photo.size > 0) {
       const bytes = await photo.arrayBuffer();
       const buffer = Buffer.from(bytes);
@@ -162,7 +203,7 @@ export async function PUT(request: Request, context: any) {
     queryParams.push(id);
     
     await db.query(
-      `UPDATE members SET barcode = ?, first_name = ?, last_name = ?, phone = ?, email = ?, emergency_contact = ?, gender = ?, date_of_birth = ?, address = ? ${photoQueryPart} WHERE id = ?`,
+      `UPDATE members SET barcode = ?, first_name = ?, last_name = ?, phone = ?, email = ?, emergency_contact = ?, gender = ?, date_of_birth = ?, address = ? ${debtQueryPart} ${photoQueryPart} WHERE id = ?`,
       queryParams
     );
     

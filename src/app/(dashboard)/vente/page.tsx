@@ -4,10 +4,12 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ShoppingCart, History, Search, Plus, Minus, Trash2, CheckCircle, 
   User, Users, Scale, Package, AlertCircle, X, ChevronRight, 
-  Receipt, Calendar, Filter, CreditCard, Banknote, RefreshCw, Eye, ArrowUpRight, Camera
+  Receipt, Calendar, Filter, CreditCard, Banknote, RefreshCw, Eye, ArrowUpRight, Camera,
+  Scan
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from '@/contexts/ToastContext';
+import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
 
 interface Product {
   id: number;
@@ -68,6 +70,7 @@ interface SaleRecord {
   member_id: number | null;
   member_first_name?: string;
   member_last_name?: string;
+  member_barcode?: string;
   member_phone?: string;
   member_photo_url?: string;
   guest_name?: string;
@@ -83,6 +86,47 @@ interface SalesSummary {
   cashTotal: string;
   cardTotal: string;
   debtTotal: string;
+}
+
+function MemberSaleAvatar({ 
+  src, 
+  firstName = '', 
+  lastName = '', 
+  className = "w-10 h-10 rounded-full"
+}: { 
+  src?: string | null; 
+  firstName?: string; 
+  lastName?: string; 
+  className?: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return (
+      <div 
+        className={`${className} bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex flex-col items-center justify-center text-slate-400 select-none shadow-xs`}
+        title="Photo indisponible"
+      >
+        <User className="w-1/2 h-1/2 text-slate-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${className} bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center shadow-xs`}>
+      <img
+        src={src}
+        alt={`${firstName} ${lastName}`.trim()}
+        className="w-full h-full object-cover"
+        loading="lazy"
+        onError={() => setHasError(true)}
+      />
+    </div>
+  );
 }
 
 export default function VentePage() {
@@ -340,15 +384,37 @@ export default function VentePage() {
     }
   }, []);
 
+  const handleSelectMember = (m: Member) => {
+    setCustomerType('member');
+    setSelectedMemberId(m.id);
+    setMemberSearchQuery('');
+    setMemberDropdownOpen(false);
+    showToast(`Membre sélectionné : ${m.first_name} ${m.last_name}`, 'success');
+  };
+
   const handleScanBarcodeSubmit = (e?: React.FormEvent, forceQuery?: string) => {
     if (e) e.preventDefault();
-    const query = (forceQuery || searchFilter).trim();
+    const query = (forceQuery || searchFilter).trim().toLowerCase();
     if (!query) return;
 
+    // 1. Check if scanned barcode belongs to a member
+    const memberMatch = members.find(
+      m => (m.barcode && m.barcode.trim().toLowerCase() === query) ||
+           (m.phone && m.phone.trim() === query)
+    );
+    if (memberMatch) {
+      playScanSuccessSound();
+      handleSelectMember(memberMatch);
+      setSearchFilter('');
+      return;
+    }
+
+    // 2. Check if scanned barcode matches an active product
     const exactBarcode = activeProducts.find(
-      p => p.barcode && p.barcode.trim().toLowerCase() === query.toLowerCase()
+      p => p.barcode && p.barcode.trim().toLowerCase() === query
     );
     if (exactBarcode) {
+      playScanSuccessSound();
       handleProductClick(exactBarcode);
       setSearchFilter('');
       showToast(`Article scanné : "${exactBarcode.name}" ajouté au panier !`, 'success');
@@ -356,6 +422,7 @@ export default function VentePage() {
     }
 
     if (filteredProducts.length === 1) {
+      playScanSuccessSound();
       handleProductClick(filteredProducts[0]);
       setSearchFilter('');
       showToast(`Article ajouté : "${filteredProducts[0].name}"`, 'success');
@@ -363,14 +430,13 @@ export default function VentePage() {
     }
 
     if (filteredProducts.length === 0) {
-      showToast(`Aucun article actif trouvé pour : "${query}"`, 'warning');
+      playScanErrorSound();
+      showToast(`Aucun article ni membre trouvé pour : "${query}"`, 'warning');
     }
   };
 
   // Hardware scanner listener
   useEffect(() => {
-    if (activeTab !== 'pos') return;
-
     const handleWindowKeyDown = (e: KeyboardEvent) => {
       if (fractionalProduct) return;
 
@@ -383,21 +449,50 @@ export default function VentePage() {
 
       if (e.key === 'Enter') {
         if (scanBufferRef.current.length >= 3) {
-          const code = scanBufferRef.current.trim();
+          const code = scanBufferRef.current.trim().toLowerCase();
           scanBufferRef.current = '';
+
+          // If on History tab, scanning a barcode filters the sales list directly!
+          if (activeTab === 'history') {
+            playScanSuccessSound();
+            setHistorySearch(code);
+            showToast(`Filtrage de l'historique par code-barres : "${code}"`, 'info');
+            return;
+          }
+
+          // 1. Check if scanned barcode belongs to a member
+          const memberMatch = members.find(
+            m => (m.barcode && m.barcode.trim().toLowerCase() === code) ||
+                 (m.phone && m.phone.trim() === code) ||
+                 String(m.id) === code
+          );
+          if (memberMatch) {
+            playScanSuccessSound();
+            handleSelectMember(memberMatch);
+            return;
+          }
+
+          // 2. Check if scanned barcode belongs to an active product
           const match = activeProducts.find(
-            p => p.barcode && p.barcode.trim().toLowerCase() === code.toLowerCase()
+            p => p.barcode && p.barcode.trim().toLowerCase() === code
           );
           if (match) {
+            playScanSuccessSound();
             handleProductClick(match);
             showToast(`Article scanné : "${match.name}" ajouté !`, 'success');
+            return;
+          }
+
+          if (!isInput) {
+            playScanErrorSound();
+            showToast(`Code-barres non reconnu : "${code}"`, 'warning');
           }
         }
         scanBufferRef.current = '';
         return;
       }
 
-      if (e.key.length === 1) {
+      if (e.key === 'length' ? false : e.key.length === 1) {
         if (timeDiff > 120 && isInput) {
           scanBufferRef.current = '';
           return;
@@ -413,7 +508,7 @@ export default function VentePage() {
 
     window.addEventListener('keydown', handleWindowKeyDown);
     return () => window.removeEventListener('keydown', handleWindowKeyDown);
-  }, [activeTab, fractionalProduct, activeProducts]);
+  }, [activeTab, fractionalProduct, activeProducts, members]);
 
   // Checkout POS
   const handleCheckout = async () => {
@@ -778,22 +873,12 @@ export default function VentePage() {
                         <div className="bg-white border-2 border-blue-100 rounded-2xl p-3 flex items-center justify-between shadow-sm transition-all hover:border-blue-300">
                           <div className="flex items-center gap-3 min-w-0">
                             {/* Member Photo or Fallback */}
-                            <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-blue-50 border-2 border-white shadow-sm shrink-0 relative flex items-center justify-center">
-                              {selectedMember.photo_url ? (
-                                <img
-                                  src={selectedMember.photo_url}
-                                  alt={`${selectedMember.first_name} ${selectedMember.last_name}`}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                <span className="font-black text-blue-700 text-sm">
-                                  {selectedMember.first_name?.[0]}{selectedMember.last_name?.[0]}
-                                </span>
-                              )}
-                            </div>
+                            <MemberSaleAvatar
+                              src={selectedMember.photo_url}
+                              firstName={selectedMember.first_name}
+                              lastName={selectedMember.last_name}
+                              className="w-12 h-12 rounded-full border-2 border-white shadow-sm"
+                            />
 
                             {/* Member Details */}
                             <div className="min-w-0 flex flex-col justify-center">
@@ -841,16 +926,47 @@ export default function VentePage() {
                             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                               type="text"
-                              placeholder="Rechercher par nom, téléphone, code..."
+                              placeholder="Scanner la carte ou chercher (nom, tél)..."
                               value={memberSearchQuery}
                               onChange={(e) => {
-                                setMemberSearchQuery(e.target.value);
+                                const val = e.target.value;
+                                setMemberSearchQuery(val);
                                 setMemberDropdownOpen(true);
+
+                                // Instant auto-select when a full barcode is scanned/pasted
+                                const trimmed = val.trim().toLowerCase();
+                                if (trimmed.length >= 3) {
+                                  const exactBarcodeMatch = members.find(m => 
+                                    m.barcode && m.barcode.trim().toLowerCase() === trimmed
+                                  );
+                                  if (exactBarcodeMatch) {
+                                    handleSelectMember(exactBarcodeMatch);
+                                  }
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const trimmed = memberSearchQuery.trim().toLowerCase();
+                                  if (!trimmed) return;
+
+                                  const match = members.find(m => 
+                                    (m.barcode && m.barcode.trim().toLowerCase() === trimmed) ||
+                                    (m.phone && m.phone.trim() === trimmed) ||
+                                    (`${m.first_name} ${m.last_name}`.toLowerCase() === trimmed)
+                                  ) || (filteredMembers.length === 1 ? filteredMembers[0] : null);
+
+                                  if (match) {
+                                    handleSelectMember(match);
+                                  } else {
+                                    showToast(`Aucun membre trouvé pour "${memberSearchQuery}"`, 'warning');
+                                  }
+                                }
                               }}
                               onFocus={() => setMemberDropdownOpen(true)}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8.5 pr-8 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white transition-all"
                             />
-                            {memberSearchQuery && (
+                            {memberSearchQuery ? (
                               <button
                                 type="button"
                                 onClick={() => setMemberSearchQuery('')}
@@ -858,6 +974,10 @@ export default function VentePage() {
                               >
                                 <X className="w-3 h-3" />
                               </button>
+                            ) : (
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" title="Lecteur de code-barres actif">
+                                <Scan className="w-3.5 h-3.5 text-slate-400" />
+                              </span>
                             )}
                           </div>
 
@@ -876,11 +996,7 @@ export default function VentePage() {
                                     <button
                                       key={m.id}
                                       type="button"
-                                      onClick={() => {
-                                        setSelectedMemberId(m.id);
-                                        setMemberSearchQuery('');
-                                        setMemberDropdownOpen(false);
-                                      }}
+                                      onClick={() => handleSelectMember(m)}
                                       className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all ${
                                         isSelected
                                           ? 'bg-blue-50/80 border border-blue-200 text-blue-900 shadow-sm'
@@ -889,22 +1005,12 @@ export default function VentePage() {
                                     >
                                       <div className="flex items-center gap-3 min-w-0">
                                         {/* Member Photo */}
-                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center shadow-xs">
-                                          {m.photo_url ? (
-                                            <img
-                                              src={m.photo_url}
-                                              alt=""
-                                              className="w-full h-full object-cover"
-                                              onError={(e) => {
-                                                (e.target as HTMLElement).style.display = 'none';
-                                              }}
-                                            />
-                                          ) : (
-                                            <span className="font-bold text-slate-500 text-xs">
-                                              {m.first_name?.[0]}{m.last_name?.[0]}
-                                            </span>
-                                          )}
-                                        </div>
+                                        <MemberSaleAvatar
+                                          src={m.photo_url}
+                                          firstName={m.first_name}
+                                          lastName={m.last_name}
+                                          className="w-10 h-10 rounded-full"
+                                        />
 
                                         <div className="min-w-0 flex flex-col justify-center">
                                           <div className={`font-bold text-sm truncate leading-tight ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
@@ -1180,15 +1286,15 @@ export default function VentePage() {
 
               {/* Search input */}
               <div className="relative w-full lg:w-72">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Ticket #, nom client, tél..."
+                  placeholder="Ticket #, client, code-barres, tél..."
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
                 />
-                {historySearch && (
+                {historySearch ? (
                   <button
                     type="button"
                     onClick={() => setHistorySearch('')}
@@ -1196,6 +1302,10 @@ export default function VentePage() {
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                ) : (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" title="Lecteur de code-barres actif">
+                    <Scan className="w-3.5 h-3.5 text-slate-400" />
+                  </span>
                 )}
               </div>
             </div>
@@ -1337,24 +1447,17 @@ export default function VentePage() {
                                     <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1 mt-0.5 justify-end sm:justify-start">
                                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
                                       Membre du Club
+                                      {sale.member_barcode && (
+                                        <span className="font-mono text-slate-500 font-bold ml-1">#{sale.member_barcode}</span>
+                                      )}
                                     </span>
                                   </div>
-                                  <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center shadow-xs relative">
-                                    {sale.member_photo_url ? (
-                                      <img
-                                        src={sale.member_photo_url}
-                                        alt={`${sale.member_first_name} ${sale.member_last_name}`}
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                          (e.target as HTMLElement).style.display = 'none';
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px] uppercase">
-                                        {sale.member_first_name?.[0] || 'M'}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <MemberSaleAvatar
+                                    src={sale.member_photo_url}
+                                    firstName={sale.member_first_name}
+                                    lastName={sale.member_last_name}
+                                    className="w-10 h-10 rounded-full"
+                                  />
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2.5 flex-row-reverse sm:flex-row text-right sm:text-left">
@@ -1564,21 +1667,18 @@ export default function VentePage() {
               <div>
                 <span className="text-slate-400 block font-semibold text-[10px] uppercase mb-1">Client</span>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
-                    {selectedSaleDetails.customer_type === 'member' && selectedSaleDetails.member_photo_url ? (
-                      <img
-                        src={selectedSaleDetails.member_photo_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : selectedSaleDetails.customer_type === 'member' ? (
-                      <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
-                        {selectedSaleDetails.member_first_name?.[0] || 'M'}
-                      </div>
-                    ) : (
+                  {selectedSaleDetails.customer_type === 'member' ? (
+                    <MemberSaleAvatar
+                      src={selectedSaleDetails.member_photo_url}
+                      firstName={selectedSaleDetails.member_first_name}
+                      lastName={selectedSaleDetails.member_last_name}
+                      className="w-9 h-9 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
                       <User className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <span className="font-bold text-slate-900 block truncate">
                       {selectedSaleDetails.customer_type === 'member'
@@ -1588,6 +1688,7 @@ export default function VentePage() {
                     {selectedSaleDetails.customer_type === 'member' ? (
                       <span className="text-[10px] text-blue-600 font-medium block">
                         {selectedSaleDetails.member_phone || 'Membre du club'}
+                        {selectedSaleDetails.member_barcode && ` • #${selectedSaleDetails.member_barcode}`}
                       </span>
                     ) : (
                       <span className="text-[10px] text-slate-400 block">Client de passage</span>

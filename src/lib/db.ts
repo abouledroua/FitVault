@@ -44,6 +44,35 @@ export async function ensureDbInitialized(db: mysql.Pool) {
       await db.query("ALTER TABLE users ADD COLUMN photo_url VARCHAR(255) DEFAULT NULL");
     }
 
+    // 5. Ensure gym_settings table exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS gym_settings (
+        id INT PRIMARY KEY DEFAULT 1,
+        gym_name VARCHAR(255) DEFAULT '',
+        facebook VARCHAR(255) DEFAULT '',
+        phone VARCHAR(100) DEFAULT '',
+        logo_url VARCHAR(255) DEFAULT NULL,
+        badge_image_url VARCHAR(255) DEFAULT NULL,
+        badge_template VARCHAR(50) DEFAULT 'standard',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Ensure badge_template column exists if table was already created
+    const [badgeCols]: any = await db.query("SHOW COLUMNS FROM gym_settings LIKE 'badge_template'");
+    if (badgeCols.length === 0) {
+      await db.query("ALTER TABLE gym_settings ADD COLUMN badge_template VARCHAR(50) DEFAULT 'standard'");
+    }
+
+    // Ensure initial gym_settings row exists
+    await db.query(`
+      INSERT IGNORE INTO gym_settings (id, gym_name, facebook, phone, badge_template)
+      VALUES (1, 'FitVault Gym', '', '', 'standard')
+    `);
+
+    // 6. Ensure existing sessions never expire prematurely
+    await db.query("UPDATE user_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 1 YEAR) WHERE expires_at < DATE_ADD(NOW(), INTERVAL 30 DAY)").catch(() => {});
+
     dbInitDone = true;
   } catch (error) {
     console.error('Error during DB initialization check:', error);

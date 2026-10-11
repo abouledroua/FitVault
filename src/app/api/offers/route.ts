@@ -150,6 +150,29 @@ export async function PUT(request: Request) {
   }
 }
 
+// PATCH toggle offer active status
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, is_active } = body;
+
+    if (!id || is_active === undefined) {
+      return NextResponse.json({ error: 'ID et statut is_active requis' }, { status: 400 });
+    }
+
+    const db = await getDbConnection();
+    await db.query('UPDATE offers SET is_active = ? WHERE id = ?', [Boolean(is_active), id]);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: `Formule ${is_active ? 'activée' : 'désactivée'} avec succès` 
+    });
+  } catch (error) {
+    console.error('Error toggling offer status:', error);
+    return NextResponse.json({ error: 'Erreur lors du changement de statut' }, { status: 500 });
+  }
+}
+
 // DELETE offer
 export async function DELETE(request: Request) {
   try {
@@ -161,11 +184,21 @@ export async function DELETE(request: Request) {
     }
 
     const db = await getDbConnection();
-    // Check if linked to inscriptions
+
+    // 1. Check if used in offer_sports
+    const [offerSports]: any = await db.query('SELECT COUNT(*) as count FROM offer_sports WHERE offer_id = ?', [id]);
+    if (offerSports[0]?.count > 0) {
+      return NextResponse.json({ 
+        error: 'Suppression impossible : cette formule est associée à des disciplines sportives (offer_sports). Vous pouvez la désactiver à la place.' 
+      }, { status: 400 });
+    }
+
+    // 2. Check if linked to inscriptions
     const [inscriptions]: any = await db.query('SELECT COUNT(*) as count FROM inscriptions WHERE offer_id = ?', [id]);
     if (inscriptions[0]?.count > 0) {
-      await db.query('UPDATE offers SET is_active = FALSE WHERE id = ?', [id]);
-      return NextResponse.json({ success: true, message: 'Offre désactivée car des membres y sont déjà abonnés' });
+      return NextResponse.json({ 
+        error: 'Suppression impossible : des membres possèdent déjà des abonnements souscrits avec cette formule. Vous pouvez la désactiver à la place.' 
+      }, { status: 400 });
     }
 
     await db.query('DELETE FROM offers WHERE id = ?', [id]);

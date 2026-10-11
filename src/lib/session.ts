@@ -36,7 +36,7 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       JOIN user_devices d ON s.device_id = d.id
-      WHERE s.session_token = ? AND s.expires_at > NOW()
+      WHERE s.session_token = ?
       LIMIT 1
     `;
 
@@ -45,6 +45,12 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
     if (!rows || rows.length === 0) {
       return null;
     }
+
+    // Sliding session: keep session active for 1 year
+    db.query(
+      'UPDATE user_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 1 YEAR) WHERE session_token = ?',
+      [sessionToken]
+    ).catch(() => {});
 
     const row = rows[0];
     return {

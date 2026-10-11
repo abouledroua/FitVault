@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   Clock, 
   UserCheck, 
@@ -9,6 +10,7 @@ import {
   Calendar as CalendarIcon, 
   Dumbbell, 
   AlertTriangle, 
+  AlertCircle,
   CheckCircle, 
   ArrowRight,
   Filter,
@@ -21,6 +23,7 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirmDialog } from '@/contexts/ConfirmDialogContext';
+import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
 
 interface PresentMember {
   id: number;
@@ -51,6 +54,38 @@ interface HistoryLog {
   sportName: string;
   offerTitle: string;
   status: string;
+}
+
+function AttendanceMemberPhoto({ src, name, compact = false }: { src: string | null; name: string; compact?: boolean }) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return (
+      <div 
+        className="w-full h-full bg-slate-100 flex flex-col items-center justify-center text-slate-400 select-none p-0.5"
+        title="Photo indisponible"
+      >
+        <Users className={compact ? "w-4 h-4 text-slate-400" : "w-6 h-6 text-slate-400"} />
+        {!compact && (
+          <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">Indisponible</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      loading="lazy"
+      onError={() => setHasError(true)}
+      className="w-full h-full object-cover"
+    />
+  );
 }
 
 export default function AttendancePage() {
@@ -95,7 +130,8 @@ export default function AttendancePage() {
       const res = await fetch('/api/attendance/present');
       if (res.ok) {
         const data = await res.json();
-        setPresentMembers(data);
+        const list = Array.isArray(data) ? data : (data.present || []);
+        setPresentMembers(list);
       }
     } catch (err) {
       console.error(err);
@@ -135,7 +171,10 @@ export default function AttendancePage() {
       const data = await res.json();
 
       if (res.ok) {
+        playScanSuccessSound();
         if (data.alreadyPresent) {
+          showToast(data.message, 'info');
+        } else if (data.departed) {
           showToast(data.message, 'info');
         } else if (data.isDebtSession) {
           showToast(data.message, 'warning');
@@ -145,9 +184,11 @@ export default function AttendancePage() {
         setQuickCheckinInput('');
         fetchPresentMembers();
       } else {
+        playScanErrorSound();
         showToast(data.error || 'Erreur lors du pointage', 'error');
       }
     } catch (err) {
+      playScanErrorSound();
       console.error(err);
       showToast('Erreur inattendue', 'error');
     } finally {
@@ -191,39 +232,94 @@ export default function AttendancePage() {
 
   return (
     <div className="flex flex-col h-full space-y-6">
-      {/* Top Banner & Stats */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <UserCheck className="w-6 h-6 text-blue-600" />
-            Gestion des Présences & Pointage
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Contrôle des accès en temps réel, alertes d'abonnement et historique des arrivées/départs.
-          </p>
-        </div>
+      {/* Top Banner */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+          <UserCheck className="w-6 h-6 text-blue-600" />
+          Gestion des Présences & Pointage
+        </h1>
+        <p className="text-slate-500 text-sm mt-1">
+          Contrôle des accès en temps réel, alertes d'abonnement et historique des arrivées/départs.
+        </p>
+      </div>
 
-        {/* Tab switcher */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200 w-full md:w-auto gap-1">
+      {/* Redesigned Section Selector Under the Title (Matching Settings Screen) */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* Option 1: Présents Actuellement */}
           <button
+            type="button"
             onClick={() => setActiveTab('present')}
-            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`group flex items-center gap-3.5 p-3.5 rounded-xl border transition-all text-left ${
               activeTab === 'present'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-blue-50/80 border-blue-300 text-blue-900 shadow-xs ring-1 ring-blue-200/50'
+                : 'bg-slate-50/50 border-transparent hover:bg-slate-100/80 hover:border-slate-200 text-slate-600'
             }`}
           >
-            <Clock className="w-4 h-4" /> Présents Actuellement ({presentMembers.length})
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                activeTab === 'present'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'bg-white text-slate-500 border border-slate-200 group-hover:text-blue-600 group-hover:border-blue-200'
+              }`}
+            >
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-sm truncate">Présents Actuellement</span>
+                <span
+                  className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                    activeTab === 'present'
+                      ? 'bg-blue-200/70 text-blue-800'
+                      : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  {presentMembers.length}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                Membres en salle & pointage en direct
+              </p>
+            </div>
           </button>
+
+          {/* Option 2: Registre & Historique */}
           <button
+            type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`group flex items-center gap-3.5 p-3.5 rounded-xl border transition-all text-left ${
               activeTab === 'history'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-blue-50/80 border-blue-300 text-blue-900 shadow-xs ring-1 ring-blue-200/50'
+                : 'bg-slate-50/50 border-transparent hover:bg-slate-100/80 hover:border-slate-200 text-slate-600'
             }`}
           >
-            <CalendarIcon className="w-4 h-4" /> Registre & Historique
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                activeTab === 'history'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'bg-white text-slate-500 border border-slate-200 group-hover:text-blue-600 group-hover:border-blue-200'
+              }`}
+            >
+              <CalendarIcon className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-sm truncate">Registre & Historique</span>
+                <span
+                  className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                    activeTab === 'history'
+                      ? 'bg-blue-200/70 text-blue-800'
+                      : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  {historyLogs.length > 0 ? historyLogs.length : 'Filtres'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                Journal des entrées & sorties par date
+              </p>
+            </div>
           </button>
         </div>
       </div>
@@ -319,15 +415,21 @@ export default function AttendancePage() {
                 >
                   <div>
                     <div className="flex items-start gap-4 mb-3">
-                      <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-                        {m.photo ? (
-                          <img src={m.photo} alt={m.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Users className="w-7 h-7 text-slate-400" />
-                        )}
-                      </div>
+                      <Link 
+                        href={`/members/${m.memberId}`}
+                        className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center flex-shrink-0 hover:ring-2 hover:ring-blue-400 hover:opacity-95 transition-all cursor-pointer"
+                        title="Voir la fiche membre"
+                      >
+                        <AttendanceMemberPhoto src={m.photo} name={m.name} />
+                      </Link>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-slate-900 text-base uppercase truncate">{m.name}</h3>
+                        <Link 
+                          href={`/members/${m.memberId}`}
+                          className="font-bold text-slate-900 text-base uppercase truncate block hover:text-blue-600 transition-colors cursor-pointer"
+                          title="Voir la fiche membre"
+                        >
+                          {m.name}
+                        </Link>
                         <p className="text-xs font-mono text-slate-500">#{m.barcode}</p>
                         
                         <div className="mt-1 flex items-center gap-1.5">
@@ -432,9 +534,24 @@ export default function AttendancePage() {
                       <tr key={log.id} className="flex flex-col sm:table-row bg-white sm:bg-transparent border border-slate-200 sm:border-0 rounded-xl sm:rounded-none p-3 sm:p-0 hover:bg-slate-50/80 transition-colors">
                         <td className="py-2 sm:py-3 px-1 sm:px-4 flex justify-between items-center sm:table-cell border-b border-slate-50 sm:border-0">
                           <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Membre</span>
-                          <div className="text-right sm:text-left">
-                            <div className="font-bold text-slate-900 uppercase">{log.name}</div>
-                            <span className="font-mono text-[10px] text-slate-400">#{log.barcode}</span>
+                          <div className="flex items-center gap-3 text-right sm:text-left justify-end sm:justify-start">
+                            <Link
+                              href={`/members/${log.memberId}`}
+                              className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0 hover:ring-2 hover:ring-blue-400 hover:opacity-95 transition-all cursor-pointer"
+                              title="Voir la fiche membre"
+                            >
+                              <AttendanceMemberPhoto src={log.photo} name={log.name} compact={true} />
+                            </Link>
+                            <div className="min-w-0">
+                              <Link
+                                href={`/members/${log.memberId}`}
+                                className="font-bold text-slate-900 uppercase hover:text-blue-600 transition-colors block truncate cursor-pointer"
+                                title="Voir la fiche membre"
+                              >
+                                {log.name}
+                              </Link>
+                              <span className="font-mono text-[10px] text-slate-400">#{log.barcode}</span>
+                            </div>
                           </div>
                         </td>
                         <td className="py-2 sm:py-3 px-1 sm:px-4 flex justify-between items-center sm:table-cell border-b border-slate-50 sm:border-0">

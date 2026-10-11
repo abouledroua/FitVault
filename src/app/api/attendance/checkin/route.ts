@@ -32,21 +32,48 @@ export async function POST(request: Request) {
 
     // 2. Check if already checked in
     const [alreadyPresent] = await db.query<RowDataPacket[]>(
-      'SELECT * FROM attendance_logs WHERE member_id = ? AND status = ?',
+      'SELECT * FROM attendance_logs WHERE member_id = ? AND status = ? ORDER BY checked_in_at DESC LIMIT 1',
       [member.id, 'present']
     );
 
     if (alreadyPresent.length > 0) {
+      const attendance = alreadyPresent[0];
+      const checkinTime = new Date(attendance.checked_in_at).getTime();
+      const diffMs = Date.now() - checkinTime;
+      const threeMinutesMs = 3 * 60 * 1000;
+
+      // If scanned again in less than 3 minutes: preserve the exact current message
+      if (diffMs < threeMinutesMs) {
+        return NextResponse.json({
+          alreadyPresent: true,
+          attendanceId: attendance.id,
+          member: {
+            id: member.id,
+            name: `${member.first_name} ${member.last_name}`,
+            photo: member.photo_url,
+            barcode: member.barcode,
+          },
+          message: `${member.first_name} ${member.last_name} est déjà présent(e) dans la salle.`
+        });
+      }
+
+      // If more than 3 minutes passed: automatically mark departure
+      await db.query(
+        'UPDATE attendance_logs SET status = ?, checked_out_at = NOW() WHERE id = ?',
+        ['departed', attendance.id]
+      );
+
       return NextResponse.json({
-        alreadyPresent: true,
-        attendanceId: alreadyPresent[0].id,
+        departed: true,
+        attendanceId: attendance.id,
+        member_name: `${member.first_name} ${member.last_name}`,
         member: {
           id: member.id,
           name: `${member.first_name} ${member.last_name}`,
           photo: member.photo_url,
           barcode: member.barcode,
         },
-        message: `${member.first_name} ${member.last_name} est déjà présent(e) dans la salle.`
+        message: `Départ enregistré pour ${member.first_name} ${member.last_name}.`
       });
     }
 

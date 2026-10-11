@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         s.member_id,
         m.first_name AS member_first_name,
         m.last_name AS member_last_name,
+        m.barcode AS member_barcode,
         m.phone AS member_phone,
         m.photo_url AS member_photo_url,
         s.guest_name,
@@ -60,11 +61,12 @@ export async function GET(request: Request) {
         s.guest_name LIKE ? OR 
         m.first_name LIKE ? OR 
         m.last_name LIKE ? OR 
+        m.barcode LIKE ? OR 
         m.phone LIKE ? OR
         CAST(s.id AS CHAR) LIKE ?
       )`;
       const searchPattern = `%${search}%`;
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
     }
 
     query += ` ORDER BY s.sale_date DESC LIMIT 200`;
