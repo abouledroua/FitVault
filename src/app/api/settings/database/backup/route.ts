@@ -48,7 +48,7 @@ export async function GET() {
     dump += `-- Date: ${now.toISOString()}\n`;
     dump += `-- Database: ${process.env.DB_NAME || 'fitvault_db'}\n`;
     dump += `-- ========================================================\n\n`;
-    dump += `SET NAMES utf8mb4;\n`;
+    dump += `SET NAMES utf8;\n`;
     dump += `SET FOREIGN_KEY_CHECKS = 0;\n`;
     dump += `SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";\n`;
     dump += `SET time_zone = "+00:00";\n\n`;

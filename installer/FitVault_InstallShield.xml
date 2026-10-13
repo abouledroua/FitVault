@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<InstallShieldProject>
+  <!-- InstallShield Project Definition for FitVault -->
+  <Property Name="ProductCode">{9F579044-884A-4D78-9B94-F8E35A2BD364}</Property>
+  <Property Name="UpgradeCode">{1D74F138-BE95-4670-A5E4-CA7EB33A7C20}</Property>
+  <Property Name="ProductName">FitVault</Property>
+  <Property Name="ProductVersion">1.0.0</Property>
+  <Property Name="Manufacturer">FitVault Solutions</Property>
+  
+  <Prerequisites>
+    <Prerequisite Name="MySQL Server">
+      <File>mysql\mysql-installer-community.msi</File>
+      <CommandLine>/qn /norestart</CommandLine>
+    </Prerequisite>
+  </Prerequisites>
+
+  <CustomActions>
+    <Action Name="SetupMySQLDatabase" Type="PowerShell">
+      <ScriptPath>installer\scripts\setup-mysql.ps1</ScriptPath>
+      <ExecutionTime>Deferred</ExecutionTime>
+    </Action>
+  </CustomActions>
+</InstallShieldProject>

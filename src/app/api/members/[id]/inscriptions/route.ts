@@ -139,6 +139,22 @@ export async function POST(request: Request, context: any) {
       );
     }
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'CREATE_INSCRIPTION',
+      tableName: 'inscriptions',
+      recordId: inscriptionId,
+      details: {
+        memberId,
+        offerTitle: offer.title,
+        price,
+        paid,
+        remainingDebt,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate
+      }
+    });
+
     return NextResponse.json({
       success: true,
       inscriptionId,

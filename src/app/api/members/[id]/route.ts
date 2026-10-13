@@ -206,6 +206,19 @@ export async function PUT(request: Request, context: any) {
       `UPDATE members SET barcode = ?, first_name = ?, last_name = ?, phone = ?, email = ?, emergency_contact = ?, gender = ?, date_of_birth = ?, address = ? ${debtQueryPart} ${photoQueryPart} WHERE id = ?`,
       queryParams
     );
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'UPDATE_MEMBER',
+      tableName: 'members',
+      recordId: id,
+      details: {
+        first_name,
+        last_name,
+        phone,
+        barcode
+      }
+    });
     
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -219,6 +232,9 @@ export async function DELETE(request: Request, context: any) {
     const resolvedParams = await context.params;
     const id = resolvedParams.id;
     const db = await getDbConnection();
+
+    // Fetch member info before deletion for logging
+    const [existingMember]: any = await db.query('SELECT first_name, last_name, barcode, phone FROM members WHERE id = ?', [id]);
 
     // 1. Check for product sales (boutique) - Cannot delete member if products were sold to them
     const [saleRows]: any = await db.query('SELECT COUNT(*) as count FROM product_sales WHERE member_id = ?', [id]);
@@ -262,6 +278,14 @@ export async function DELETE(request: Request, context: any) {
 
     // If completely clean, proceed with delete
     await db.query('DELETE FROM members WHERE id = ?', [id]);
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'DELETE_MEMBER',
+      tableName: 'members',
+      recordId: id,
+      details: existingMember?.[0] || { id }
+    });
     
     return NextResponse.json({ success: true });
   } catch (error) {

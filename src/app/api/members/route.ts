@@ -20,7 +20,7 @@ export async function GET() {
       LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM attendance_logs GROUP BY member_id) a ON a.member_id = m.id
       LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM caisse_transactions WHERE member_id IS NOT NULL GROUP BY member_id) c ON c.member_id = m.id
       LEFT JOIN (SELECT member_id, COUNT(*) as cnt FROM member_debts GROUP BY member_id) d ON d.member_id = m.id
-      ORDER BY m.created_at DESC
+      ORDER BY m.last_name ASC, m.first_name ASC
     `);
     return NextResponse.json(rows);
   } catch (error) {
@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    
+
     const barcode = formData.get('barcode') as string;
     const first_name = formData.get('first_name') as string;
     const last_name = formData.get('last_name') as string;
@@ -42,27 +42,27 @@ export async function POST(request: Request) {
     const gender = formData.get('gender') as string;
     const date_of_birth = formData.get('date_of_birth') as string;
     const address = formData.get('address') as string;
-    
+
     let photo_url = null;
     const photo = formData.get('photo') as File;
-    
+
     if (photo && photo.size > 0) {
       const bytes = await photo.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      
+
       const uploadDir = path.join(process.cwd(), 'public', 'photo', 'member');
       await fs.mkdir(uploadDir, { recursive: true });
-      
+
       const filename = `${Date.now()}-${photo.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       const filepath = path.join(uploadDir, filename);
-      
+
       await fs.writeFile(filepath, buffer);
       photo_url = `/photo/member/${filename}`;
     }
-    
+
     const db = await getDbConnection();
     let finalBarcode = barcode;
-    
+
     if (!finalBarcode) {
       const [rows]: any = await db.query("SELECT MAX(CAST(barcode AS UNSIGNED)) as max_barcode FROM members WHERE barcode REGEXP '^[0-9]+$'");
       const maxBarcode = rows[0]?.max_barcode;
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         finalBarcode = '1000';
       }
     }
-    
+
     const initial_debt = Math.max(0, parseFloat((formData.get('initial_debt') as string) || '0') || 0);
 
     const [result]: any = await db.query(
@@ -86,7 +86,21 @@ export async function POST(request: Request) {
         [result.insertId, initial_debt]
       );
     }
-    
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'CREATE_MEMBER',
+      tableName: 'members',
+      recordId: result.insertId,
+      details: {
+        barcode: finalBarcode,
+        first_name,
+        last_name,
+        phone,
+        initial_debt
+      }
+    });
+
     return NextResponse.json({ id: result.insertId, barcode: finalBarcode }, { status: 201 });
   } catch (error) {
     console.error('Error creating member:', error);

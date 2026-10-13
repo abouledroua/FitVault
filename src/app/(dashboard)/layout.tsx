@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AttendanceSidebar } from '@/components/AttendanceSidebar';
 import { GlobalBarcodeListener } from '@/components/GlobalBarcodeListener';
-import { LayoutDashboard, Wallet, Users, Clock, Settings, LogOut, ChevronLeft, Menu, ShoppingCart, Package, X } from 'lucide-react';
+import { LayoutDashboard, Wallet, Users, Clock, Settings, LogOut, ChevronLeft, Menu, ShoppingCart, Package, X, ShieldAlert } from 'lucide-react';
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -87,6 +87,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       label: 'Système',
       items: [
         { name: 'Paramètres', icon: Settings, path: '/settings' },
+        ...(currentUser?.role === 'admin' ? [{ name: 'Journal d\'audit (Logs)', icon: ShieldAlert, path: '/logs' }] : []),
       ]
     }
   ];

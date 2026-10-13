@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { RowDataPacket } from 'mysql2';
@@ -104,6 +104,13 @@ export async function POST(req: Request) {
          badge_template = VALUES(badge_template)`,
       [gymName, facebook, phone, currentLogoUrl, currentBadgeImageUrl, badgeTemplate]
     );
+
+    await createAuditLog({
+      action: 'UPDATE_GYM_SETTINGS',
+      tableName: 'gym_settings',
+      recordId: '1',
+      details: { gymName, phone, facebook, badgeTemplate }
+    });
 
     return NextResponse.json({
       success: true,

@@ -34,10 +34,12 @@ import {
   FileText,
   CheckCircle2,
   FolderUp,
-  Globe
+  Globe,
+  ShieldAlert
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirmDialog } from '@/contexts/ConfirmDialogContext';
+import { formatAmount, formatCurrency } from '@/lib/formatters';
 
 interface Sport {
   id: number;
@@ -1402,7 +1404,7 @@ export default function SettingsPage() {
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-xs text-slate-600 space-y-1 mb-4">
                       <div className="flex justify-between">
                         <span>Séance sans abonnement (Dette):</span>
-                        <span className="font-bold text-slate-900">{sport.default_single_session_price} DA</span>
+                        <span className="font-bold text-slate-900">{formatCurrency(sport.default_single_session_price, 2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Formules reliées:</span>
@@ -1513,7 +1515,7 @@ export default function SettingsPage() {
                         </div>
                       </div>
                       <span className="text-xl font-extrabold text-blue-600">
-                        {offer.price} <span className="text-xs font-semibold text-slate-500">DA</span>
+                        {formatAmount(offer.price, 2)} <span className="text-xs font-semibold text-slate-500">DA</span>
                       </span>
                     </div>
 
@@ -1956,6 +1958,34 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Lien vers Journal d'Audit */}
+          <div className="bg-slate-900 text-white p-5 sm:p-6 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                  Journal d'Audit Système (Logs BDD)
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600/80 text-white">
+                    Admin
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Consultez la table de log détaillant chaque action en base (créations, modifications, suppressions, paiements) avec horodatage, utilisateur et UUID du poste.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href="/logs"
+              className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 shadow-sm"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span>Ouvrir le Journal d'Audit</span>
+            </a>
           </div>
         </div>
       )}

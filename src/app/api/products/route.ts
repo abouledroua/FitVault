@@ -63,6 +63,14 @@ export async function POST(request: Request) {
       ]
     );
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'CREATE_PRODUCT',
+      tableName: 'products',
+      recordId: result.insertId,
+      details: { name: name.trim(), category, stock_quantity, sell_price_unit }
+    });
+
     return NextResponse.json({ success: true, productId: result.insertId });
   } catch (error) {
     console.error('Error creating product:', error);
@@ -130,6 +138,14 @@ export async function PUT(request: Request) {
       ]
     );
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'UPDATE_PRODUCT',
+      tableName: 'products',
+      recordId: id,
+      details: { name: name.trim(), stock_quantity, sell_price_unit }
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating product:', error);
@@ -149,6 +165,14 @@ export async function PATCH(request: Request) {
 
     const db = await getDbConnection();
     await db.query('UPDATE products SET is_archived = ? WHERE id = ?', [Boolean(is_archived), id]);
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: is_archived ? 'ARCHIVE_PRODUCT' : 'RESTORE_PRODUCT',
+      tableName: 'products',
+      recordId: id,
+      details: { is_archived: Boolean(is_archived) }
+    });
 
     return NextResponse.json({
       success: true,
@@ -185,7 +209,18 @@ export async function DELETE(request: Request) {
       }, { status: 400 });
     }
 
+    const [prod]: any = await db.query('SELECT name, category FROM products WHERE id = ?', [id]);
+
     await db.query('DELETE FROM products WHERE id = ?', [id]);
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'DELETE_PRODUCT',
+      tableName: 'products',
+      recordId: id,
+      details: prod?.[0] || { id }
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting product:', error);

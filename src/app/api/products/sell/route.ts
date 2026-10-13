@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 import { getCurrentSession } from '@/lib/session';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
@@ -157,6 +157,22 @@ export async function POST(request: Request) {
         [grandTotal, member_id]
       );
     }
+
+    // Audit log
+    await createAuditLog({
+      action: 'PRODUCT_SALE',
+      tableName: 'product_sales',
+      recordId: saleId,
+      details: {
+        saleId,
+        customerType: customer_type || 'passage',
+        memberId: member_id || null,
+        grandTotal,
+        paymentMethod: payment_method || 'cash',
+        itemCount: processedItems.length,
+        items: processedItems.map(i => ({ name: i.product_name, qty: i.quantity_sold, format: i.sale_format, total: i.total_line_price }))
+      }
+    });
 
     return NextResponse.json({
       success: true,

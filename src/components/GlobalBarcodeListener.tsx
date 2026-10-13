@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
+import { formatCurrency } from '@/lib/formatters';
 
 export function GlobalBarcodeListener() {
   const router = useRouter();
@@ -190,7 +191,7 @@ export function GlobalBarcodeListener() {
             <p className="text-xs text-slate-500 font-mono">Code #{scannedMember.barcode}</p>
             <div className="mt-1 flex items-center gap-2">
               <span className={`text-xs font-bold ${parseFloat(scannedMember.total_debt) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                Dette: {scannedMember.total_debt} DA
+                Dette: {formatCurrency(scannedMember.total_debt, 2)}
               </span>
             </div>
           </div>

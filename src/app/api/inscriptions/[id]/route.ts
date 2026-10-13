@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 import { getCurrentSession } from '@/lib/session';
 
 export async function DELETE(request: Request, context: any) {
@@ -16,6 +16,13 @@ export async function DELETE(request: Request, context: any) {
 
     // Also remove any related caisse_transactions
     await db.query(`DELETE FROM caisse_transactions WHERE related_id = ? AND module_category = 'entrainement'`, [id]);
+
+    await createAuditLog({
+      action: 'DELETE_INSCRIPTION',
+      tableName: 'inscriptions',
+      recordId: id,
+      details: { inscriptionId: id }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

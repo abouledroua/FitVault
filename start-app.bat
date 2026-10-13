@@ -1,13 +1,17 @@
 @echo off
-echo Starting FitVault...
+setlocal
+cd /d "%~dp0"
 
-echo Verifying database setup...
-powershell -ExecutionPolicy Bypass -File .\setup-db.ps1
+:: If packaged FitVault.exe exists, launch it directly
+if exist "%~dp0FitVault.exe" (
+    start "" "%~dp0FitVault.exe"
+    exit
+)
 
-echo Starting Next.js Dev Server...
-start cmd /k "npm run dev"
-
-echo Starting Electron Desktop App...
-rem Wait a few seconds for Next.js to compile
-timeout /t 5 /nobreak > nul
-npm run start-electron
+:: Start modern WPF UI launcher without console window
+if exist "installer\scripts\launcher-ui.ps1" (
+    powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "%~dp0installer\scripts\launcher-ui.ps1"
+) else (
+    start http://localhost:3000
+)
+exit

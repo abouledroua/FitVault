@@ -17,6 +17,7 @@ import {
   Dumbbell
 } from "lucide-react";
 import { BrandLogo } from '@/components/BrandLogo';
+import { formatAmount, formatCurrency } from '@/lib/formatters';
 
 function DashboardMemberPhoto({ src, name }: { src?: string | null; name: string }) {
   const [hasError, setHasError] = useState(false);
@@ -118,8 +119,8 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div>
               <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Caisse (Solde Net)</p>
-              <h3 className="text-2xl font-black text-slate-900">
-                {stats.caisseNet} <span className="text-xs font-semibold text-slate-400">DA</span>
+              <h3 className="text-2xl font-black text-slate-900 font-mono">
+                {formatAmount(stats.caisseNet, 2)} <span className="text-xs font-semibold text-slate-400 font-sans">DA</span>
               </h3>
             </div>
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
@@ -127,7 +128,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="text-xs text-emerald-600 font-semibold relative z-10 flex items-center gap-1">
-            <span>Aujourd'hui:</span> <strong>{stats.caisseToday} DA</strong>
+            <span>Aujourd'hui:</span> <strong className="font-mono">{formatCurrency(stats.caisseToday, 2)}</strong>
           </div>
         </Link>
 
@@ -160,8 +161,8 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div>
               <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Ventes Boutique</p>
-              <h3 className="text-2xl font-black text-slate-900">
-                {stats.boutiqueSalesToday} <span className="text-xs font-semibold text-slate-400">DA</span>
+              <h3 className="text-2xl font-black text-slate-900 font-mono">
+                {formatAmount(stats.boutiqueSalesToday, 2)} <span className="text-xs font-semibold text-slate-400 font-sans">DA</span>
               </h3>
             </div>
             <div className="p-3 bg-violet-50 text-violet-600 rounded-xl group-hover:bg-violet-600 group-hover:text-white transition-colors">

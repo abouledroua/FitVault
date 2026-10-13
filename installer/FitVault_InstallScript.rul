@@ -1,0 +1,67 @@
+// InstallShield InstallScript Project File for FitVault
+// Integrates MySQL Silent Installation & Database Setup
+
+#define APP_NAME        "FitVault"
+#define APP_VERSION     "1.0.0"
+#define COMPANY_NAME    "FitVault Solutions"
+#define DEFAULT_DIR     "C:\\FitVault"
+#define MYSQL_SERVICE   "wampmysqld64"
+
+#include "ifx.h"
+
+prototype InstallMySQLPrerequisite();
+prototype InitializeFitVaultDatabase();
+
+function OnFirstUIBefore()
+    number nResult;
+    string szTitle, szMsg;
+begin
+    // Welcome Dialog
+    szTitle = "Installation de " + APP_NAME;
+    szMsg = "Ce programme va installer " + APP_NAME + " ainsi que le moteur de base de données MySQL sur votre ordinateur.";
+    SdWelcome(szTitle, szMsg);
+
+    // Ask Destination Directory
+    TARGETDIR = DEFAULT_DIR;
+    AskDestPath(szTitle, "Choisissez le dossier d'installation :", TARGETDIR, 0);
+
+    return 0;
+end;
+
+function OnFirstUIAfter()
+    number nResult;
+    string szTitle, szMsg;
+begin
+    // Trigger MySQL silent setup and schema execution
+    InstallMySQLPrerequisite();
+    InitializeFitVaultDatabase();
+
+    szTitle = "Installation terminée";
+    szMsg = APP_NAME + " a été installé avec succès. MySQL et la base de données ont été configurés.";
+    SdFinish(szTitle, szMsg, "", "", 0, 0);
+    return 0;
+end;
+
+function InstallMySQLPrerequisite()
+    string szMsiPath, szParams;
+    number nResult;
+begin
+    szMsiPath = SUPPORTDIR ^ "mysql-installer.msi";
+    if (Is(FILE_EXISTS, szMsiPath)) then
+        SetStatusWindow(0, "Installation silencieuse du serveur MySQL...");
+        szParams = "/i \"" + szMsiPath + "\" /qn /norestart";
+        LaunchAppAndWait("msiexec.exe", szParams, LAAW_OPTION_WAIT);
+    endif;
+end;
+
+function InitializeFitVaultDatabase()
+    string szScript, szParams;
+    number nResult;
+begin
+    SetStatusWindow(0, "Initialisation de la base de données FitVault...");
+    szScript = TARGETDIR ^ "installer\\scripts\\setup-mysql.ps1";
+    if (Is(FILE_EXISTS, szScript)) then
+        szParams = "-ExecutionPolicy Bypass -NoProfile -File \"" + szScript + "\"";
+        LaunchAppAndWait("powershell.exe", szParams, LAAW_OPTION_WAIT | LAAW_OPTION_HIDDEN);
+    endif;
+end;

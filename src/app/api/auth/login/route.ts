@@ -22,6 +22,12 @@ export async function POST(request: NextRequest) {
     }
     
     const user = rows[0];
+
+    // Check if user account is active
+    if (!user.is_active) {
+      return NextResponse.json({ error: 'Ce compte utilisateur est désactivé. Veuillez contacter un administrateur.' }, { status: 403 });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     
     if (!passwordMatch) {
@@ -58,6 +64,19 @@ export async function POST(request: NextRequest) {
       'INSERT INTO user_sessions (session_token, user_id, device_id, expires_at) VALUES (?, ?, ?, ?)',
       [sessionToken, user.id, deviceRows[0].id, expiresAt]
     );
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'LOGIN',
+      tableName: 'user_sessions',
+      recordId: user.id,
+      userId: user.id,
+      deviceUuid: deviceRows[0].device_uuid,
+      userName: user.full_name || user.username,
+      deviceName: deviceRows[0].device_name,
+      ipAddress: ip,
+      details: { username: user.username, deviceName: deviceRows[0].device_name }
+    });
 
     const response = NextResponse.json({ success: true });
     

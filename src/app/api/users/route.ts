@@ -112,6 +112,14 @@ export async function POST(request: Request) {
       [full_name.trim(), cleanUsername, passwordHash, userRole, photo_url]
     );
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'CREATE_USER',
+      tableName: 'users',
+      recordId: result.insertId,
+      details: { username: cleanUsername, full_name, role: userRole }
+    });
+
     return NextResponse.json({
       success: true,
       userId: result.insertId,
@@ -211,6 +219,14 @@ export async function PUT(request: Request) {
 
     await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'UPDATE_USER',
+      tableName: 'users',
+      recordId: id,
+      details: { username: cleanUsername, full_name, role: userRole, is_active: active }
+    });
+
     return NextResponse.json({ 
       success: true, 
       photoUrl: removePhoto ? null : newPhotoUrl,
@@ -241,13 +257,22 @@ export async function DELETE(request: Request) {
 
     // Check if this is the only remaining admin
     const [adminCount]: any = await db.query('SELECT COUNT(*) as count FROM users WHERE role = "admin" AND is_active = TRUE');
-    const [userToDelete]: any = await db.query('SELECT role FROM users WHERE id = ?', [id]);
+    const [userToDelete]: any = await db.query('SELECT username, full_name, role FROM users WHERE id = ?', [id]);
 
     if (userToDelete.length > 0 && userToDelete[0].role === 'admin' && adminCount[0]?.count <= 1) {
       return NextResponse.json({ error: 'Impossible de supprimer le seul administrateur actif du système' }, { status: 400 });
     }
 
     await db.query('DELETE FROM users WHERE id = ?', [id]);
+
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'DELETE_USER',
+      tableName: 'users',
+      recordId: id,
+      details: userToDelete?.[0] || { id }
+    });
+
     return NextResponse.json({ success: true, message: 'Utilisateur supprimé avec succès' });
   } catch (error) {
     console.error('Error deleting user:', error);

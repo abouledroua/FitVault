@@ -24,6 +24,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirmDialog } from '@/contexts/ConfirmDialogContext';
 import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
+import { formatCurrency } from '@/lib/formatters';
 
 interface PresentMember {
   id: number;
@@ -453,7 +454,7 @@ export default function AttendancePage() {
                         {m.isDebtSession ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                             <AlertTriangle className="w-3 h-3 text-amber-600" />
-                            Dette ({m.debtAmount || 50} DA)
+                            Dette ({formatCurrency(m.debtAmount || 50, 2)})
                           </span>
                         ) : m.status === 'valid' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">

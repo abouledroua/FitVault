@@ -30,6 +30,7 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
         u.full_name,
         u.role,
         u.photo_url,
+        u.is_active,
         d.id as device_id,
         d.device_uuid,
         d.device_name
@@ -46,13 +47,20 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
       return null;
     }
 
+    const row = rows[0];
+
+    // If user has been deactivated after session was created, invalidate session immediately
+    if (!row.is_active) {
+      await db.query('DELETE FROM user_sessions WHERE user_id = ?', [row.user_id]);
+      return null;
+    }
+
     // Sliding session: keep session active for 1 year
     db.query(
       'UPDATE user_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 1 YEAR) WHERE session_token = ?',
       [sessionToken]
     ).catch(() => {});
 
-    const row = rows[0];
     return {
       userId: row.user_id,
       username: row.username,

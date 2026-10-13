@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // GET all sports
@@ -46,6 +46,13 @@ export async function POST(request: Request) {
       [name.trim(), description?.trim() || null, price]
     );
 
+    await createAuditLog({
+      action: 'CREATE_SPORT',
+      tableName: 'sports',
+      recordId: result.insertId,
+      details: { name: name.trim(), price }
+    });
+
     return NextResponse.json({
       success: true,
       sportId: result.insertId,
@@ -76,6 +83,13 @@ export async function PUT(request: Request) {
       [name.trim(), description?.trim() || null, price, active, id]
     );
 
+    await createAuditLog({
+      action: 'UPDATE_SPORT',
+      tableName: 'sports',
+      recordId: id,
+      details: { name: name.trim(), price, is_active: active }
+    });
+
     return NextResponse.json({ success: true, message: 'Discipline mise à jour avec succès' });
   } catch (error) {
     console.error('Error updating sport:', error);
@@ -95,6 +109,13 @@ export async function PATCH(request: Request) {
 
     const db = await getDbConnection();
     await db.query('UPDATE sports SET is_active = ? WHERE id = ?', [Boolean(is_active), id]);
+
+    await createAuditLog({
+      action: 'TOGGLE_SPORT_STATUS',
+      tableName: 'sports',
+      recordId: id,
+      details: { is_active: Boolean(is_active) }
+    });
 
     return NextResponse.json({ 
       success: true, 
@@ -135,6 +156,14 @@ export async function DELETE(request: Request) {
     }
 
     await db.query('DELETE FROM sports WHERE id = ?', [id]);
+
+    await createAuditLog({
+      action: 'DELETE_SPORT',
+      tableName: 'sports',
+      recordId: id,
+      details: { sportId: id }
+    });
+
     return NextResponse.json({ success: true, message: 'Discipline supprimée avec succès' });
   } catch (error) {
     console.error('Error deleting sport:', error);

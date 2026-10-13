@@ -30,7 +30,7 @@ import {
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
-import { formatDate, formatDateTime } from '@/lib/formatters';
+import { formatDate, formatDateTime, formatAmount, formatCurrency } from '@/lib/formatters';
 import { 
   format, 
   addMonths, 
@@ -468,10 +468,10 @@ export default function MemberDetailsPage() {
                         <div 
                           key={sIdx}
                           className="flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs"
-                          title={`Séance en dette: ${session.debt_amount || '50'} DA (${session.sport_name || 'Sport'})`}
+                          title={`Séance en dette: ${formatCurrency(session.debt_amount || 50, 2)} (${session.sport_name || 'Sport'})`}
                         >
                           <AlertTriangle className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                          <span className="truncate">Dette: {session.debt_amount || 50} DA</span>
+                          <span className="truncate">Dette: {formatCurrency(session.debt_amount || 50, 2)}</span>
                         </div>
                       );
                     }
@@ -706,7 +706,7 @@ export default function MemberDetailsPage() {
                       : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                   }`}
                 >
-                  {parseFloat(member.total_debt) > 0 ? `${parseFloat(member.total_debt).toFixed(2)} DA dû` : 'Soldé'}
+                  {parseFloat(member.total_debt) > 0 ? `${formatCurrency(member.total_debt, 2)} dû` : 'Soldé'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 truncate mt-0.5">
@@ -770,8 +770,8 @@ export default function MemberDetailsPage() {
                   <Banknote className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500" />
                   Dette Globale
                 </span>
-                <span className={`text-xl font-black ${parseFloat(member.total_debt) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                  {parseFloat(member.total_debt).toFixed(2)} DA
+                <span className={`text-xl font-black font-mono ${parseFloat(member.total_debt) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {formatCurrency(member.total_debt, 2)}
                 </span>
               </div>
               {parseFloat(member.total_debt) > 0 ? (
@@ -820,7 +820,7 @@ export default function MemberDetailsPage() {
 
                     <div className="flex justify-between font-bold text-slate-900 pr-12">
                       <span>{insc.offer_title}</span>
-                      <span className="text-blue-600">{insc.offer_price} DA</span>
+                      <span className="text-blue-600">{formatCurrency(insc.offer_price, 2)}</span>
                     </div>
                     <div className="text-slate-500 text-[11px]">
                       Du {formatDate(insc.start_date)} au {formatDate(insc.end_date)}
@@ -839,7 +839,7 @@ export default function MemberDetailsPage() {
                         {insc.payment_status === 'paid' ? 'Payé Intégral' :
                          insc.payment_status === 'partial' ? 'Paiement Partiel' : 'En Attente'}
                       </span>
-                      <span className="text-slate-500">Payé: {insc.total_paid} DA</span>
+                      <span className="text-slate-500">Payé: {formatCurrency(insc.total_paid, 2)}</span>
                     </div>
                   </div>
                 ))}
@@ -884,13 +884,13 @@ export default function MemberDetailsPage() {
                 </div>
                 <div className="mt-3">
                   <span className="text-2xl sm:text-3xl font-black text-red-600 font-mono">
-                    {parseFloat(member.total_debt).toFixed(2)} <span className="text-sm font-bold">DA</span>
+                    {formatAmount(member.total_debt, 2)} <span className="text-sm font-bold font-sans">DA</span>
                   </span>
                   <p className="text-xs text-red-700/80 mt-1">
                     {unpaidDebts.length} ligne{unpaidDebts.length > 1 ? 's' : ''} de dette non soldée{unpaidDebts.length > 1 ? 's' : ''}
                     {parseFloat(member.initial_debt || '0') > 0 && (
                       <span className="block text-amber-700 font-bold mt-0.5">
-                        (dont solde initial : {parseFloat(member.initial_debt).toFixed(2)} DA)
+                        (dont solde initial : {formatCurrency(member.initial_debt, 2)})
                       </span>
                     )}
                   </p>
@@ -907,10 +907,10 @@ export default function MemberDetailsPage() {
                 </div>
                 <div className="mt-3">
                   <span className="text-2xl sm:text-3xl font-black text-amber-900 font-mono">
-                    {totalIncurredDebt.toFixed(2)} <span className="text-sm font-bold">DA</span>
+                    {formatAmount(totalIncurredDebt, 2)} <span className="text-sm font-bold font-sans">DA</span>
                   </span>
                   <p className="text-xs text-amber-700 mt-1">
-                    {totalDebtsCount} dette{totalDebtsCount > 1 ? 's' : ''} au total ({totalSettledDebt.toFixed(2)} DA réglés)
+                    {totalDebtsCount} dette{totalDebtsCount > 1 ? 's' : ''} au total ({formatCurrency(totalSettledDebt, 2)} réglés)
                   </p>
                 </div>
               </div>
@@ -925,7 +925,7 @@ export default function MemberDetailsPage() {
                 </div>
                 <div className="mt-3">
                   <span className="text-2xl sm:text-3xl font-black text-emerald-700 font-mono">
-                    {totalPaidSum.toFixed(2)} <span className="text-sm font-bold">DA</span>
+                    {formatAmount(totalPaidSum, 2)} <span className="text-sm font-bold font-sans">DA</span>
                   </span>
                   <p className="text-xs text-emerald-700 mt-1">
                     {payments.length} règlement{payments.length > 1 ? 's' : ''} en caisse pour ce membre
@@ -1078,7 +1078,7 @@ export default function MemberDetailsPage() {
                                   ? 'text-red-600 bg-red-50 border-red-200' 
                                   : 'text-slate-500 bg-slate-50 border-slate-200 line-through'
                               }`}>
-                                {parseFloat(String(debt.amount)).toFixed(2)} DA
+                                {formatCurrency(debt.amount, 2)}
                               </span>
                             </td>
                           </tr>
@@ -1164,7 +1164,7 @@ export default function MemberDetailsPage() {
                               <div className="text-right sm:text-left">
                                 <p className="font-bold text-slate-900">{p.motif || 'Règlement'}</p>
                                 {p.note && (
-                                  <p className="text-[11px] text-slate-500 mt-0.5">{p.note}</p>
+                                   <p className="text-[11px] text-slate-500 mt-0.5">{p.note}</p>
                                 )}
                               </div>
                             </td>
@@ -1176,7 +1176,7 @@ export default function MemberDetailsPage() {
                               <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Montant</span>
                               <div className="flex items-center justify-end gap-3">
                                 <span className="font-black font-mono text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1 rounded-lg">
-                                  + {parseFloat(String(p.amount)).toFixed(2)} DA
+                                  + {formatCurrency(p.amount, 2)}
                                 </span>
                                 <button
                                   onClick={() => handleDeletePayment(p.id)}
@@ -1246,7 +1246,7 @@ export default function MemberDetailsPage() {
                 >
                   {offersList.map((off) => (
                     <option key={off.id} value={off.id}>
-                      {off.title} — {off.price} DA ({off.sport_names})
+                      {off.title} — {formatCurrency(off.price, 2)} ({off.sport_names})
                     </option>
                   ))}
                 </select>

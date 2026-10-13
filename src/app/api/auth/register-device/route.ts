@@ -23,6 +23,13 @@ export async function POST(request: Request) {
     }
 
     const db = await getDbConnection();
+    
+    // Ensure user exists and is active
+    const [userRows]: any = await db.query('SELECT id, is_active FROM users WHERE id = ?', [userId]);
+    if (userRows.length === 0 || !userRows[0].is_active) {
+      return NextResponse.json({ error: 'Ce compte utilisateur est désactivé ou inexistant' }, { status: 403 });
+    }
+
     const userAgent = request.headers.get('user-agent') || 'Unknown';
     
     const [result]: any = await db.query(

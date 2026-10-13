@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // GET all offers with linked sports
@@ -84,6 +84,13 @@ export async function POST(request: Request) {
       await db.query('INSERT INTO offer_sports (offer_id, sport_id) VALUES (?, ?)', [offerId, sportId]);
     }
 
+    await createAuditLog({
+      action: 'CREATE_OFFER',
+      tableName: 'offers',
+      recordId: offerId,
+      details: { title: title.trim(), price: parseFloat(price), duration_type, duration_value, sport_ids }
+    });
+
     return NextResponse.json({ success: true, offerId, message: 'Offre créée avec succès' });
   } catch (error) {
     console.error('Error creating offer:', error);
@@ -143,6 +150,13 @@ export async function PUT(request: Request) {
       }
     }
 
+    await createAuditLog({
+      action: 'UPDATE_OFFER',
+      tableName: 'offers',
+      recordId: id,
+      details: { title: title.trim(), price: parseFloat(price), is_active }
+    });
+
     return NextResponse.json({ success: true, message: 'Offre modifiée avec succès' });
   } catch (error) {
     console.error('Error updating offer:', error);
@@ -162,6 +176,13 @@ export async function PATCH(request: Request) {
 
     const db = await getDbConnection();
     await db.query('UPDATE offers SET is_active = ? WHERE id = ?', [Boolean(is_active), id]);
+
+    await createAuditLog({
+      action: 'TOGGLE_OFFER_STATUS',
+      tableName: 'offers',
+      recordId: id,
+      details: { is_active: Boolean(is_active) }
+    });
 
     return NextResponse.json({ 
       success: true, 
@@ -202,6 +223,14 @@ export async function DELETE(request: Request) {
     }
 
     await db.query('DELETE FROM offers WHERE id = ?', [id]);
+
+    await createAuditLog({
+      action: 'DELETE_OFFER',
+      tableName: 'offers',
+      recordId: id,
+      details: { offerId: id }
+    });
+
     return NextResponse.json({ success: true, message: 'Offre supprimée avec succès' });
   } catch (error) {
     console.error('Error deleting offer:', error);

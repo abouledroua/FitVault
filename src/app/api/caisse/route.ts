@@ -163,6 +163,21 @@ export async function POST(request: Request) {
       ]
     );
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'CAISSE_TRANSACTION',
+      tableName: 'caisse_transactions',
+      recordId: result.insertId,
+      details: {
+        direction,
+        category,
+        type,
+        amount: amountVal,
+        motif: motif.trim(),
+        member_id
+      }
+    });
+
     return NextResponse.json({
       success: true,
       transactionId: result.insertId,

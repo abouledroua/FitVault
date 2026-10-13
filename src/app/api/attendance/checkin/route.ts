@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { formatCurrency } from '@/lib/formatters';
 
 export async function POST(request: Request) {
   try {
@@ -148,6 +149,20 @@ export async function POST(request: Request) {
 
     const attendanceId = attResult.insertId;
 
+    const { createAuditLog } = await import('@/lib/db');
+    await createAuditLog({
+      action: 'MEMBER_CHECKIN',
+      tableName: 'attendance_logs',
+      recordId: attendanceId,
+      details: {
+        memberId: member.id,
+        memberName: `${member.first_name} ${member.last_name}`,
+        barcode: member.barcode,
+        sportName: sport.name,
+        isDebt
+      }
+    });
+
     // 6. If debt session, record into member_debts and update member's total_debt
     if (isDebt) {
       const [debtResult] = await db.query<ResultSetHeader>(
@@ -185,7 +200,7 @@ export async function POST(request: Request) {
       debtAmount: isDebt ? sessionPrice : 0,
       sportName: sport.name,
       message: isDebt
-        ? `Séance enregistrée en dette (${sessionPrice} DA) pour ${member.first_name} ${member.last_name} (Abonnement expiré ou inexistant).`
+        ? `Séance enregistrée en dette (${formatCurrency(sessionPrice, 2)}) pour ${member.first_name} ${member.last_name} (Abonnement expiré ou inexistant).`
         : `Pointage réussi ! Bon entraînement à ${member.first_name} ${member.last_name}.`
     });
   } catch (error) {

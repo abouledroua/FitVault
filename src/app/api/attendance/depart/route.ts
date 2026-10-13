@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbConnection } from '@/lib/db';
+import { getDbConnection, createAuditLog } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +16,13 @@ export async function POST(request: Request) {
       'UPDATE attendance_logs SET status = ?, checked_out_at = NOW() WHERE id = ? AND status = ?',
       ['departed', attendance_id, 'present']
     );
+
+    await createAuditLog({
+      action: 'MEMBER_CHECKOUT',
+      tableName: 'attendance_logs',
+      recordId: attendance_id,
+      details: { attendance_id }
+    });
     
     return NextResponse.json({ success: true });
   } catch (error) {

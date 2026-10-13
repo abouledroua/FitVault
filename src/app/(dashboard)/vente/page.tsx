@@ -10,6 +10,7 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import { useToast } from '@/contexts/ToastContext';
 import { playScanSuccessSound, playScanErrorSound } from '@/lib/sound';
+import { formatAmount, formatCurrency } from '@/lib/formatters';
 
 interface Product {
   id: number;
@@ -552,8 +553,8 @@ export default function VentePage() {
       if (res.ok) {
         showToast(
           paymentMethod === 'debt' 
-            ? `Vente validée ! Montant (${data.grandTotal} DA) ajouté à la dette du membre.`
-            : `Encaissement validé ! (${data.grandTotal} DA enregistrés en caisse)`,
+            ? `Vente validée ! Montant (${formatCurrency(data.grandTotal, 2)}) ajouté à la dette du membre.`
+            : `Encaissement validé ! (${formatCurrency(data.grandTotal, 2)} enregistrés en caisse)`,
           'success'
         );
         setCart([]);
@@ -794,7 +795,7 @@ export default function VentePage() {
                             {isFractional ? 'À partir de' : 'Prix'}
                           </span>
                           <span className="text-sm font-black text-blue-600">
-                            {isFractional ? (p.sell_price_dose || p.sell_price_whole || p.sell_price_unit) : p.sell_price_unit} 
+                            {formatAmount(isFractional ? (p.sell_price_dose || p.sell_price_whole || p.sell_price_unit) : p.sell_price_unit, 2)}{' '}
                             <span className="text-[10px] font-bold text-slate-400 ml-0.5">DA</span>
                           </span>
                         </div>
@@ -894,7 +895,7 @@ export default function VentePage() {
                               {parseFloat(selectedMember.total_debt) > 0 ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-700 font-bold text-[10px] border border-red-100 w-fit">
                                   <AlertCircle className="w-3 h-3" />
-                                  Dette: {selectedMember.total_debt} DA
+                                  Dette: {formatCurrency(selectedMember.total_debt, 2)}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-100 w-fit">
@@ -1025,7 +1026,7 @@ export default function VentePage() {
                                       {/* Debt badge */}
                                       {hasDebt ? (
                                         <span className="shrink-0 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 border border-red-100 font-bold text-[10px]">
-                                          {m.total_debt} DA
+                                          {formatCurrency(m.total_debt, 2)}
                                         </span>
                                       ) : (
                                         <span className="shrink-0 px-2.5 py-1 rounded-lg text-emerald-700 font-bold text-[10px] bg-emerald-50 border border-emerald-100">
@@ -1060,7 +1061,7 @@ export default function VentePage() {
                           <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
                             <span className="font-semibold text-blue-600">{item.formatLabel}</span>
                             <span>•</span>
-                            <span>{item.unitPrice} DA / u</span>
+                            <span>{formatAmount(item.unitPrice, 2)} DA / u</span>
                           </div>
                         </div>
 
@@ -1137,7 +1138,7 @@ export default function VentePage() {
                 <div className="flex justify-between items-baseline pt-2">
                   <span className="text-slate-500 font-semibold text-xs">Total à Encaisser:</span>
                   <span className="text-2xl font-black text-slate-900">
-                    {cartTotal.toFixed(2)} <span className="text-sm font-bold text-blue-600">DA</span>
+                    {formatAmount(cartTotal, 2)} <span className="text-sm font-bold text-blue-600">DA</span>
                   </span>
                 </div>
 
@@ -1170,7 +1171,7 @@ export default function VentePage() {
                   <span>Voir le Panier</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-black">{cartTotal.toFixed(2)} DA</span>
+                  <span className="text-sm font-black">{formatCurrency(cartTotal, 2)}</span>
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </button>
@@ -1188,25 +1189,25 @@ export default function VentePage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
               <span className="text-[11px] font-bold uppercase text-slate-400 block mb-1">Chiffre d'Affaires</span>
-              <span className="text-2xl font-black text-slate-900">{salesSummary.totalAmount} <span className="text-xs text-blue-600">DA</span></span>
+              <span className="text-2xl font-black text-slate-900">{formatAmount(salesSummary.totalAmount, 2)} <span className="text-xs text-blue-600">DA</span></span>
               <span className="text-[11px] text-slate-400 block mt-0.5">{salesSummary.salesCount} vente(s) enregistrée(s)</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
               <span className="text-[11px] font-bold uppercase text-emerald-600 block mb-1">Total Espèces</span>
-              <span className="text-2xl font-black text-emerald-600">{salesSummary.cashTotal} <span className="text-xs text-slate-400">DA</span></span>
+              <span className="text-2xl font-black text-emerald-600">{formatAmount(salesSummary.cashTotal, 2)} <span className="text-xs text-slate-400">DA</span></span>
               <span className="text-[11px] text-slate-400 block mt-0.5">encaissé cash</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
               <span className="text-[11px] font-bold uppercase text-blue-600 block mb-1">Total Carte</span>
-              <span className="text-2xl font-black text-blue-600">{salesSummary.cardTotal} <span className="text-xs text-slate-400">DA</span></span>
+              <span className="text-2xl font-black text-blue-600">{formatAmount(salesSummary.cardTotal, 2)} <span className="text-xs text-slate-400">DA</span></span>
               <span className="text-[11px] text-slate-400 block mt-0.5">paiements électroniques</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
               <span className="text-[11px] font-bold uppercase text-red-600 block mb-1">En Dette / Crédit</span>
-              <span className="text-2xl font-black text-red-600">{salesSummary.debtTotal} <span className="text-xs text-slate-400">DA</span></span>
+              <span className="text-2xl font-black text-red-600">{formatAmount(salesSummary.debtTotal, 2)} <span className="text-xs text-slate-400">DA</span></span>
               <span className="text-[11px] text-slate-400 block mt-0.5">à recouvrer auprès des membres</span>
             </div>
           </div>
@@ -1513,7 +1514,7 @@ export default function VentePage() {
                           <td className="py-2 sm:py-3.5 px-1 sm:px-4 flex justify-between items-center sm:table-cell border-b border-slate-50 sm:border-0">
                             <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Montant Total</span>
                             <div className="font-black text-slate-900 text-sm whitespace-nowrap text-right sm:text-left">
-                              {sale.total_amount} <span className="text-xs font-bold text-blue-600">DA</span>
+                              {formatAmount(sale.total_amount, 2)} <span className="text-xs font-bold text-blue-600">DA</span>
                             </div>
                           </td>
 
@@ -1579,7 +1580,7 @@ export default function VentePage() {
                     <span className="text-xs text-slate-500">Préparé sur place dans un shaker</span>
                   </div>
                   <span className="text-lg font-black text-blue-600 group-hover:scale-105 transition-transform">
-                    {fractionalProduct.sell_price_dose} DA
+                    {formatCurrency(fractionalProduct.sell_price_dose, 2)}
                   </span>
                 </button>
               )}
@@ -1603,7 +1604,7 @@ export default function VentePage() {
                     <span className="text-xs text-slate-500">Sachet pesé</span>
                   </div>
                   <span className="text-lg font-black text-blue-600 group-hover:scale-105 transition-transform">
-                    {fractionalProduct.sell_price_per_100g} DA
+                    {formatCurrency(fractionalProduct.sell_price_per_100g, 2)}
                   </span>
                 </button>
               )}
@@ -1627,7 +1628,7 @@ export default function VentePage() {
                     <span className="text-xs text-slate-500">Produit complet scellé</span>
                   </div>
                   <span className="text-lg font-black text-blue-600 group-hover:scale-105 transition-transform">
-                    {fractionalProduct.sell_price_whole} DA
+                    {formatCurrency(fractionalProduct.sell_price_whole, 2)}
                   </span>
                 </button>
               )}
@@ -1717,11 +1718,11 @@ export default function VentePage() {
                     <div>
                       <span className="font-bold text-slate-900 block">{item.product_name}</span>
                       <span className="text-[10px] text-slate-500">
-                        {formatFormatLabel(item.sale_format)} • {item.unit_price_charged} DA × {parseFloat(item.quantity_sold)}
+                        {formatFormatLabel(item.sale_format)} • {formatCurrency(item.unit_price_charged, 2)} × {parseFloat(item.quantity_sold)}
                       </span>
                     </div>
                     <span className="font-black text-slate-900">
-                      {item.total_line_price} <span className="text-[10px] text-slate-400 font-bold">DA</span>
+                      {formatAmount(item.total_line_price, 2)} <span className="text-[10px] text-slate-400 font-bold">DA</span>
                     </span>
                   </div>
                 ))}
@@ -1732,7 +1733,7 @@ export default function VentePage() {
             <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
               <span className="font-bold text-slate-700 text-sm">Total Réglé :</span>
               <span className="text-2xl font-black text-blue-600">
-                {selectedSaleDetails.total_amount} <span className="text-sm">DA</span>
+                {formatAmount(selectedSaleDetails.total_amount, 2)} <span className="text-sm">DA</span>
               </span>
             </div>
 

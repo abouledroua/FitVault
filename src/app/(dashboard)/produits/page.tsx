@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useConfirmDialog } from '@/contexts/ConfirmDialogContext';
+import { formatCurrency } from '@/lib/formatters';
 
 interface Product {
   id: number;
@@ -461,18 +462,18 @@ export default function ProduitsPage() {
                       </td>
                       <td className="py-2 sm:py-3.5 px-1 sm:px-4 flex justify-between items-center sm:table-cell border-b border-slate-50 sm:border-0">
                         <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Prix Achat</span>
-                        <span className="text-slate-500 font-mono">{p.buy_price_unit} DA</span>
+                        <span className="text-slate-500 font-mono">{formatCurrency(p.buy_price_unit, 2)}</span>
                       </td>
                       <td className="py-2 sm:py-3.5 px-1 sm:px-4 flex justify-between items-center sm:table-cell border-b border-slate-50 sm:border-0">
                         <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Prix Vente</span>
                         <div className="font-bold text-slate-900 text-right sm:text-left">
                           {p.product_type === 'fractional' ? (
                             <span className="text-[11px] block max-w-[120px] sm:max-w-none text-right sm:text-left leading-tight">
-                              Dose: {p.sell_price_dose} DA<br className="sm:hidden" />
-                              <span className="hidden sm:inline"> | </span>100g: {p.sell_price_per_100g} DA
+                              Dose: {formatCurrency(p.sell_price_dose, 2)}<br className="sm:hidden" />
+                              <span className="hidden sm:inline"> | </span>100g: {formatCurrency(p.sell_price_per_100g, 2)}
                             </span>
                           ) : (
-                            <span>{p.sell_price_unit} DA</span>
+                            <span>{formatCurrency(p.sell_price_unit, 2)}</span>
                           )}
                         </div>
                       </td>

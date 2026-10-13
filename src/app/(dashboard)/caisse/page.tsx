@@ -19,6 +19,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { formatAmount } from '@/lib/formatters';
 
 interface Transaction {
   id: number;
@@ -186,8 +187,8 @@ export default function CaissePage() {
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs relative overflow-hidden">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Solde Net Caisse</span>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className={`text-2xl font-black ${parseFloat(stats.netBalance) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              {stats.netBalance}
+            <span className={`text-2xl font-black font-mono ${parseFloat(stats.netBalance) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {formatAmount(stats.netBalance, 2)}
             </span>
             <span className="text-xs font-bold text-slate-400">DA</span>
           </div>
@@ -203,7 +204,7 @@ export default function CaissePage() {
             </div>
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-slate-900">{stats.totalIn}</span>
+            <span className="text-2xl font-black text-slate-900 font-mono">{formatAmount(stats.totalIn, 2)}</span>
             <span className="text-xs font-bold text-slate-400">DA</span>
           </div>
           <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">Flux créditeurs</span>
@@ -218,7 +219,7 @@ export default function CaissePage() {
             </div>
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-blue-600">{stats.entrainementTotal}</span>
+            <span className="text-2xl font-black text-blue-600 font-mono">{formatAmount(stats.entrainementTotal, 2)}</span>
             <span className="text-xs font-bold text-slate-400">DA</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">Abonnements & Séances</span>
@@ -233,7 +234,7 @@ export default function CaissePage() {
             </div>
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-violet-600">{stats.boutiqueTotal}</span>
+            <span className="text-2xl font-black text-violet-600 font-mono">{formatAmount(stats.boutiqueTotal, 2)}</span>
             <span className="text-xs font-bold text-slate-400">DA</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">Ventes de Produits & Snacks</span>
@@ -427,11 +428,11 @@ export default function CaissePage() {
 
                     <td className="py-2 sm:py-3 px-1 sm:px-4 flex justify-between items-center sm:table-cell">
                       <span className="sm:hidden font-bold text-[10px] text-slate-400 uppercase">Montant</span>
-                      <div className="text-right font-black text-sm whitespace-nowrap">
+                      <div className="text-right font-black text-sm whitespace-nowrap font-mono">
                         {t.flowDirection === 'in' ? (
-                          <span className="text-emerald-600">+ {t.amount} DA</span>
+                          <span className="text-emerald-600">+ {formatAmount(t.amount, 2)} DA</span>
                         ) : (
-                          <span className="text-red-500">- {t.amount} DA</span>
+                          <span className="text-red-500">- {formatAmount(t.amount, 2)} DA</span>
                         )}
                       </div>
                     </td>
